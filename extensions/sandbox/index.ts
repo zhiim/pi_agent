@@ -1,3 +1,4 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -86,6 +87,13 @@ PROVIDER_API_KEY=${process.env.PROVIDER_API_KEY}`,
   );
 }
 
-export default async function () {
-  prepareDockerFiles();
+export default async function (pi: ExtensionAPI) {
+  pi.registerCommand("sandbox:config", {
+    description:
+      "Prepare the configuration files for pi agent in docker container.",
+    handler: async (_, ctx) => {
+      prepareDockerFiles();
+      ctx.ui.notify("Prepare configuration files completed", "info");
+    },
+  });
 }
