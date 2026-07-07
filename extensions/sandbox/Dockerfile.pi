@@ -1,0 +1,38 @@
+FROM node:current-trixie-slim
+
+ARG UID=1000
+ARG GID=1000
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    jq \
+    openssh-client \
+    python3 \
+    make \
+    g++ \
+    pkg-config \
+    ripgrep \
+    fd-find \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+RUN userdel -r node \
+  && groupadd -g ${GID} piuser \
+  && useradd -m -u ${UID} -g ${GID} -s /bin/bash piuser
+
+RUN mkdir -p /home/piuser/.pi/agent /home/piuser/.pi/context-mode \
+  && chown -R piuser:piuser /home/piuser/.pi
+
+COPY pi-entrypoint.sh /usr/local/bin/pi-entrypoint.sh
+RUN chmod +x /usr/local/bin/pi-entrypoint.sh
+
+USER piuser
+WORKDIR /workspace
+
+ENTRYPOINT ["/usr/local/bin/pi-entrypoint.sh"]
+CMD []

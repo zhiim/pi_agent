@@ -1,0 +1,60 @@
+{
+  "yoloMode": false,
+  "permission": {
+    "*": "allow",
+    "path": {
+      "*": "allow",
+      "~/.ssh/*": "deny",
+      "~/.aws/*": "deny",
+      "~/.gnupg/*": "deny",
+      "*.pem": "ask",
+      "*.key": "ask",
+      "*.env": "ask",
+      "*.env.*": "ask",
+      "*.env.example": "allow",
+      ".env.example": "allow"
+    },
+    "external_directory": "allow",
+    "read": {
+      "*": "allow"
+    },
+    "grep": {
+      "*": "allow"
+    },
+    "find": {
+      "*": "allow"
+    },
+    "ls": {
+      "*": "allow"
+    },
+    "write": {
+      "*": "allow"
+    },
+    "edit": {
+      "*": "allow"
+    },
+    "bash": {
+      "*": "allow",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf ~": "deny",
+      "rm -rf ~/*": "deny",
+      "rm -rf *": "ask",
+      "git clean *": "ask",
+      "git reset --hard *": "ask",
+      "sudo *": "ask",
+      "su *": "ask",
+      "mount *": "ask",
+      "umount *": "ask",
+      "docker *": "ask",
+      "podman *": "ask"
+    },
+    "third_party_tool": "allow",
+    "mcp": {
+      "*": "allow"
+    },
+    "skill": {
+      "*": "allow"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "phases": {
+    "planning": {
+      "activeTools": [
+        "ffgrep",
+        "fffind",
+        "grep",
+        "find",
+        "ls",
+        "plannotator_submit_plan",
+        "web_search"
+      ],
+      "statusLabel": " plan"
+    }
+  }
+}

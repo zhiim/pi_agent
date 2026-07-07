@@ -1,0 +1,56 @@
+{
+  "yoloMode": false,
+  "permission": {
+    "*": "ask",
+    "path": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "~/.ssh/*": "deny"
+    },
+    "external_directory": "ask",
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "grep": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "ls": {
+      "*": "allow"
+    },
+    "write": {
+      "*": "ask",
+      "*.lock": "deny"
+    },
+    "edit": {
+      "*": "ask",
+      "*.lock": "deny"
+    },
+    "bash": {
+      "*": "ask",
+      "git status": "allow",
+      "git diff": "allow",
+      "git log *": "allow",
+      "rm -rf *": "ask",
+      "sudo *": "ask"
+    },
+    "third_party_tool": "ask",
+    "mcp": {
+      "*": "ask",
+      "mcp_status": "allow",
+      "mcp_list": "allow",
+      "mcp_search": "allow",
+      "mcp_describe": "allow"
+    },
+    "skill": {
+      "*": "ask"
+    }
+  }
+}
