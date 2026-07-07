@@ -85,3 +85,7 @@ PROVIDER_API_KEY=${process.env.PROVIDER_API_KEY}`,
     },
   );
 }
+
+export default async function () {
+  prepareDockerFiles();
+}
