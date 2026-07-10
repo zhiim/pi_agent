@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
+import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -169,7 +170,7 @@ export default async function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("sandbox:refersh-config", {
+  pi.registerCommand("sandbox:refresh-config", {
     description: "Totally refresh configuration files for Pi in Docker.",
     handler: async (_, ctx) => {
       prepareDockerFiles();
@@ -188,9 +189,26 @@ export default async function (pi: ExtensionAPI) {
   });
 
   if (pi.getFlag("sandbox")) {
-    execFileSync(path.join(destHome, "run.sh"), {
+    const result = spawnSync(path.join(destHome, "run.sh"), [], {
       cwd: process.cwd(),
       stdio: "inherit",
+      shell: false,
     });
+
+    if (result.error) {
+      console.error("Failed to run sandbox:", result.error);
+      process.exit(1);
+    }
+
+    if (result.signal) {
+      console.error(`Sandbox process terminated by signal: ${result.signal}`);
+      const signalNum =
+        os.constants.signals?.[
+          result.signal as keyof typeof os.constants.signals
+        ];
+      process.exit(128 + (typeof signalNum === "number" ? signalNum : 1));
+    }
+
+    process.exit(result.status ?? 1);
   }
 }
