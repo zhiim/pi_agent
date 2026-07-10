@@ -25,7 +25,6 @@ docker volume create "$CTX_VOLUME" >/dev/null
 
 docker run --rm -it \
   --env-file "$BASE_DIR/gateway.env" \
-  --add-host=host.docker.internal:host-gateway \
   -v "$BASE_DIR/seed:/seed:ro" \
   -v "$AGENT_VOLUME:/home/piuser/.pi/agent" \
   -v "$CTX_VOLUME:/home/piuser/.pi/context-mode" \

@@ -7,7 +7,6 @@ import path from "node:path";
 const destHome = `${process.env.HOME}/.pi/pi-docker`;
 const srcConfigDir = `${process.env.HOME}/.pi/agent`;
 const destConfigDir = `${destHome}/seed/agent`;
-const imageName = "pi-agent-sandbox";
 
 /**
  * Get the necessary configuration files to build pi agent in docker container.
@@ -130,20 +129,34 @@ function prepareDockerFiles() {
     "pi-entrypoint.sh",
   );
   fs.chmodSync(entrypointPath, 0o755);
+
   const buildScriptPath = movePreparedFile(
     "extensions/sandbox/build.sh",
     "build.sh",
   );
   fs.chmodSync(buildScriptPath, 0o755);
+
   const runScriptPath = movePreparedFile("extensions/sandbox/run.sh", "run.sh");
   fs.chmodSync(runScriptPath, 0o755);
+
   const resetVolumeScriptPath = movePreparedFile(
     "extensions/sandbox/reset-volumes.sh",
     "reset-volumes.sh",
   );
   fs.chmodSync(resetVolumeScriptPath, 0o755);
 
+  const updateConfigScriptPath = movePreparedFile(
+    "extensions/sandbox/update-config.sh",
+    "update-config.sh",
+  );
+  fs.chmodSync(updateConfigScriptPath, 0o755);
+
   writeGatewayEnv();
+
+  fs.rmSync(path.join(destConfigDir, "extensions/sandbox"), {
+    recursive: true,
+    force: true,
+  });
 }
 
 export default async function (pi: ExtensionAPI) {
@@ -151,22 +164,28 @@ export default async function (pi: ExtensionAPI) {
     description: "Build the Pi Docker sandbox image.",
     handler: async (_, ctx) => {
       prepareDockerFiles();
-      execFileSync(path.join(destHome, "build.sh"), {
-        cwd: destHome,
-        stdio: "inherit",
-      });
-      ctx.ui.notify(`Built Docker image: ${imageName}`, "info");
+      ctx.ui.notify(
+        `Build script created under ${destHome}/build.sh, now build image yourself.`,
+        "info",
+      );
     },
   });
 
   pi.registerCommand("sandbox:update-config", {
     description: "Update configuration files for Pi in Docker.",
     handler: async (_, ctx) => {
-      prepareDockerFiles();
-      execSync(
-        "docker run --rm -it --entrypoint /bin/bash pi-agent-sandbox -c 'rm -f ~/.pi/agent/.seeded'",
-      );
-      ctx.ui.notify("Config of Pi in docker updated.", "info");
+      try {
+        prepareDockerFiles();
+        execFileSync(path.join(destHome, "update-config.sh"), {
+          cwd: destHome,
+          stdio: "inherit",
+        });
+        ctx.ui.notify("Config of Pi in docker updated.", "info");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("sandbox:update-config failed:", message);
+        ctx.ui.notify(`Failed to update config: ${message}`, "error");
+      }
     },
   });
 
@@ -188,7 +207,8 @@ export default async function (pi: ExtensionAPI) {
     default: false,
   });
 
-  if (pi.getFlag("sandbox")) {
+  if (process.argv.includes("--sandbox")) {
+    console.log("Starting Pi in sandbox mode...");
     const result = spawnSync(path.join(destHome, "run.sh"), [], {
       cwd: process.cwd(),
       stdio: "inherit",

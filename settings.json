@@ -1,8 +1,5 @@
 {
-  "lastChangelogVersion": "0.80.3",
   "theme": "catppuccin",
-  "defaultProvider": "gateway",
-  "defaultModel": "openai/gpt-5.5",
   "packages": [
     "npm:pi-subagents",
     "npm:pi-web-access",
@@ -15,4 +12,3 @@
     "npm:@plannotator/pi-extension"
   ]
 }
-
