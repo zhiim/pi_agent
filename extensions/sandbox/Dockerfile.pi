@@ -21,9 +21,12 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
-RUN userdel -r node \
-  && groupadd -g ${GID} piuser \
-  && useradd -m -u ${UID} -g ${GID} -s /bin/bash piuser
+# Official node images already contain a node user/group with uid 1000 and gid 1000.
+# Reuse or replace existing ids so bind-mounted workspace files are written as the host user.
+RUN if getent passwd "${UID}" >/dev/null; then userdel -r "$(getent passwd "${UID}" | cut -d: -f1)" || true; fi \
+  && if getent group "${GID}" >/dev/null; then groupdel "$(getent group "${GID}" | cut -d: -f1)" || true; fi \
+  && groupadd -g "${GID}" piuser \
+  && useradd -m -u "${UID}" -g "${GID}" -s /bin/bash piuser
 
 RUN mkdir -p /home/piuser/.pi/agent /home/piuser/.pi/context-mode \
   && chown -R piuser:piuser /home/piuser/.pi

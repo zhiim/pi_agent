@@ -22,6 +22,9 @@
       "*.env.*": "deny",
       "*.env.example": "allow"
     },
+    "find": {
+      "*": "allow"
+    },
     "ls": {
       "*": "allow"
     },

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p "$HOME/.pi/agent"
+mkdir -p "$HOME/.pi/agent" "$HOME/.pi/context-mode"
 
 if [ -d /seed/agent ] && [ ! -f "$HOME/.pi/agent/.seeded" ]; then
   echo "[pi-sandbox] seeding ~/.pi/agent from /seed/agent"
