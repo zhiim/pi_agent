@@ -59,6 +59,12 @@
       "object": "model",
       "created": 1782875398,
       "owned_by": "openai"
+    },
+    {
+      "id": "xai/grok-4.5",
+      "object": "model",
+      "created": 1782875398,
+      "owned_by": "xai"
     }
   ],
   "object": "list"

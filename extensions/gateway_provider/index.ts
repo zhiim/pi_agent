@@ -10,8 +10,13 @@ const debug_logger = (...args: any[]) =>
 const providerBaseUrl = process.env.PROVIDER_BASE_URL!;
 const providerApiKey = process.env.PROVIDER_API_KEY;
 const modelsCachePath = `${process.env.HOME}/.pi/agent/extensions/gateway_provider/models.json`;
+const customModelPath = `${process.env.HOME}/.pi/agent/extensions/gateway_provider/custom_models${debug_mode ? ".debug" : ""}.json`;
 
-const models = builtinModels();
+const builtins = builtinModels();
+let customs: Record<string, any> = {};
+if (fs.existsSync(customModelPath)) {
+  customs = JSON.parse(fs.readFileSync(customModelPath, "utf8"));
+}
 
 function processModelCard(modelCard: string) {
   // modelCard format:
@@ -26,7 +31,7 @@ function processModelCard(modelCard: string) {
   }
 
   let modelId;
-  if (!models.getProvider(vendor)) {
+  if (!builtins.getProvider(vendor)) {
     // if no builtin provider found, model card is from third party gateway provider or not suported vendor
     modelId = cardInfos.pop();
     if (!modelId) {
@@ -87,6 +92,27 @@ async function fetchModels() {
   return modelInfos;
 }
 
+function getProviderBaseUrl(api: string): string {
+  let baseUrl;
+  switch (api) {
+    case "openai-completions":
+      baseUrl = providerBaseUrl + "/v1";
+      break;
+    case "openai-responses":
+      baseUrl = providerBaseUrl + "/v1";
+      break;
+    case "anthropic-messages":
+      baseUrl = providerBaseUrl + "/anthropic";
+      break;
+    case "google-generative-ai":
+      baseUrl = providerBaseUrl + "/gemini/v1beta";
+      break;
+    default:
+      throw new Error(`Unsupported API: ${api}`);
+  }
+  return baseUrl;
+}
+
 function getBuiltinModel(modelInfo: {
   modelCard: string;
   vendor: string;
@@ -95,6 +121,25 @@ function getBuiltinModel(modelInfo: {
   const { modelCard, vendor, modelId } = modelInfo;
 
   debug_logger(`model card: ${modelCard}`);
+
+  // if the model card is in the custom definition list, return the custom model definition
+  const custom = customs[modelCard];
+  if (custom) {
+    debug_logger(`  - found custom model definition for ${modelCard}`);
+    return {
+      id: custom.id,
+      name: custom.name,
+      reasoning: custom.reasoning,
+      input: custom.input,
+      contextWindow: custom.contextWindow,
+      maxTokens: custom.maxTokens,
+      cost: custom.cost,
+      compat: custom.compat,
+      api: custom.api,
+      provider: "gateway",
+      baseUrl: getProviderBaseUrl(custom.api),
+    };
+  }
 
   // default model definition if no builtin model found
   let model: Model<"openai-completions"> = {
@@ -111,9 +156,10 @@ function getBuiltinModel(modelInfo: {
   };
 
   debug_logger(
-    `  - looking for builtin model: vendor=${vendor}, modelId=${modelId}`,
+    `  - looking for builtin model definition: vendor=${vendor}, modelId=${modelId}`,
   );
-  const builtin = models.getModel(vendor, modelId);
+
+  const builtin = builtins.getModel(vendor, modelId);
   if (builtin) {
     let api = builtin.api;
     if (vendor !== modelCard.split("/")[0]) {
@@ -122,25 +168,11 @@ function getBuiltinModel(modelInfo: {
     }
 
     let id = modelCard;
-    let baseUrl;
-    switch (api) {
-      case "openai-completions":
-        baseUrl = providerBaseUrl + "/v1";
-        break;
-      case "openai-responses":
-        baseUrl = providerBaseUrl + "/v1";
-        break;
-      case "anthropic-messages":
-        baseUrl = providerBaseUrl + "/anthropic";
-        break;
-      case "google-generative-ai":
-        // model id of gemini API should not contain `/`
-        id = modelId;
-        baseUrl = providerBaseUrl + "/gemini/v1beta";
-        break;
-      default:
-        throw new Error(`Unsupported API: ${builtin.api}`);
+    if (api === "google-generative-ai") {
+      // model id of gemini API should not contain `/`
+      id = modelId;
     }
+    let baseUrl = getProviderBaseUrl(api);
 
     debug_logger(
       `  - builtin model found: ${builtin.id}, api=${builtin.api}, baseUrl=${builtin.baseUrl}`,
@@ -160,27 +192,28 @@ function getBuiltinModel(modelInfo: {
   return model;
 }
 
+function registerProvider(
+  modelInfos: Array<{
+    modelCard: string;
+    vendor: string;
+    modelId: string;
+  }>,
+  pi: ExtensionAPI,
+) {
+  const builtinModelInfos = modelInfos.map((modelInfo) => {
+    return getBuiltinModel(modelInfo);
+  });
+
+  pi.registerProvider("gateway", {
+    baseUrl: providerBaseUrl,
+    apiKey: providerApiKey,
+    models: builtinModelInfos,
+  });
+}
+
 export default async function (pi: ExtensionAPI) {
   if (!providerBaseUrl || !providerApiKey) {
     return null;
-  }
-
-  function registerProvider(
-    modelInfos: Array<{
-      modelCard: string;
-      vendor: string;
-      modelId: string;
-    }>,
-  ) {
-    const builtinModelInfos = modelInfos.map((modelInfo) => {
-      return getBuiltinModel(modelInfo);
-    });
-
-    pi.registerProvider("gateway", {
-      baseUrl: providerBaseUrl,
-      apiKey: providerApiKey,
-      models: builtinModelInfos,
-    });
   }
 
   let modelInfos;
@@ -200,13 +233,13 @@ export default async function (pi: ExtensionAPI) {
 
   modelInfos = await modelInfos;
 
-  registerProvider(modelInfos);
+  registerProvider(modelInfos, pi);
 
-  pi.registerCommand("model_refresh", {
+  pi.registerCommand("model-refresh", {
     description: "Refresh the list of models from the provider",
     handler: async (_, ctx) => {
       let modelInfos = await fetchModels();
-      registerProvider(modelInfos);
+      registerProvider(modelInfos, pi);
       ctx.ui.notify("Models refreshed", "info");
     },
   });
