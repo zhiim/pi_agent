@@ -5,6 +5,7 @@ package-lock.json
 package.json
 auth.json
 mcp-cache.json
+*.docker.*
 
 # Logs
 logs

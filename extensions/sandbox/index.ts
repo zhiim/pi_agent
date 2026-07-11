@@ -42,6 +42,21 @@ function copyFile(srcPath: string, destPath: string) {
   }
 }
 
+/** Check if a file path is a ".docker" variant (e.g., "foo.docker.json"). */
+function isDockerVariant(filePath: string): boolean {
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  return base.endsWith(".docker");
+}
+
+/** Return the ".docker" variant path for a given file (e.g., "foo.json" → "foo.docker.json"). */
+function getDockerVariantPath(filePath: string): string {
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  return path.join(dir, `${base}.docker${ext}`);
+}
+
 /** Copy the configuration files to docker-pi's seed directory. */
 function copyConfig(srcDir: string, destDir: string) {
   const configFiles = getConfigFiles(srcDir);
@@ -49,16 +64,27 @@ function copyConfig(srcDir: string, destDir: string) {
   fs.mkdirSync(destDir, { recursive: true });
 
   for (const file of configFiles) {
+    // Skip .docker variants — they will be used to override the base file below
+    if (isDockerVariant(file)) {
+      continue;
+    }
+
     const srcPath = path.join(srcDir, file);
     const destPath = path.join(destDir, file);
 
-    if (!fs.existsSync(srcPath)) {
-      console.warn(`no file exists - ${srcPath}`);
+    // If a .docker variant exists, use it as the source instead
+    const dockerVariantPath = getDockerVariantPath(srcPath);
+    const finalSrcPath = fs.existsSync(dockerVariantPath)
+      ? dockerVariantPath
+      : srcPath;
+
+    if (!fs.existsSync(finalSrcPath)) {
+      console.warn(`no file exists - ${finalSrcPath}`);
       continue;
     }
 
     try {
-      copyFile(srcPath, destPath);
+      copyFile(finalSrcPath, destPath);
     } catch (error) {
       console.error(`copy failed: ${file}`, error);
     }
@@ -83,25 +109,9 @@ function movePreparedFile(relativePath: string, destinationFileName?: string) {
   return destPath;
 }
 
-/** Use less strict permission config for docker container. */
-function preparePermissionConfig() {
-  const permissionDir = path.join(
-    destConfigDir,
-    "extensions/pi-permission-system",
-  );
-  const dockerConfig = path.join(permissionDir, "config.docker.json");
-  const activeConfig = path.join(permissionDir, "config.json");
-
-  requirePreparedFile(dockerConfig, "Docker permission config is missing");
-  fs.rmSync(activeConfig, { force: true });
-  fs.copyFileSync(dockerConfig, activeConfig);
-}
-
 function prepareDockerFiles() {
   fs.mkdirSync(destHome, { recursive: true });
   copyConfig(srcConfigDir, destConfigDir);
-
-  preparePermissionConfig();
 
   movePreparedFile("extensions/sandbox/Dockerfile.pi", "Dockerfile.pi");
   const entrypointPath = movePreparedFile(

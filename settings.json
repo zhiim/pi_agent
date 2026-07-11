@@ -9,6 +9,5 @@
     "npm:@ayulab/pi-rewind",
     "npm:@gotgenes/pi-permission-system",
     "npm:pi-tool-display"
-    "npm:@plannotator/pi-extension"
-  ]
+  ],
 }
