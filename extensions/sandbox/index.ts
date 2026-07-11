@@ -97,26 +97,6 @@ function preparePermissionConfig() {
   fs.copyFileSync(dockerConfig, activeConfig);
 }
 
-/** Write docker env file*/
-function writeGatewayEnv() {
-  const providerBaseUrl = process.env.PROVIDER_BASE_URL ?? "";
-  const providerApiKey = process.env.PROVIDER_API_KEY ?? "";
-  const envPath = path.join(destHome, "gateway.env");
-
-  fs.writeFileSync(
-    envPath,
-    `PROVIDER_BASE_URL=${providerBaseUrl}\nPROVIDER_API_KEY=${providerApiKey}\n`,
-    { encoding: "utf8", mode: 0o600 },
-  );
-  fs.chmodSync(envPath, 0o600);
-
-  if (!providerBaseUrl || !providerApiKey) {
-    console.warn(
-      "PROVIDER_BASE_URL or PROVIDER_API_KEY is empty. Edit ~/.pi/pi-docker/gateway.env before running the container.",
-    );
-  }
-}
-
 function prepareDockerFiles() {
   fs.mkdirSync(destHome, { recursive: true });
   copyConfig(srcConfigDir, destConfigDir);
@@ -150,8 +130,6 @@ function prepareDockerFiles() {
     "update-config.sh",
   );
   fs.chmodSync(updateConfigScriptPath, 0o755);
-
-  writeGatewayEnv();
 
   fs.rmSync(path.join(destConfigDir, "extensions/sandbox"), {
     recursive: true,

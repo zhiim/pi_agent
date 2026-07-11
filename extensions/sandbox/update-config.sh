@@ -10,7 +10,6 @@ docker volume create "$AGENT_VOLUME" >/dev/null
 docker volume create "$CTX_VOLUME" >/dev/null
 
 docker run --rm -i \
-  --env-file "$BASE_DIR/gateway.env" \
   -v "$AGENT_VOLUME:/home/piuser/.pi/agent" \
   -v "$CTX_VOLUME:/home/piuser/.pi/context-mode" \
   --entrypoint /bin/bash \
