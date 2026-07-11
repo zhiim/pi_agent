@@ -26,6 +26,8 @@ docker volume create "$CTX_VOLUME" >/dev/null
 docker run --rm -it \
   -e "PROVIDER_BASE_URL=$PROVIDER_BASE_URL" \
   -e "PROVIDER_API_KEY=$PROVIDER_API_KEY" \
+  -e "TERM=xterm-256color" \
+  -e "COLORTERM=$COLORTERM" \
   -v "$BASE_DIR/seed:/seed:ro" \
   -v "$AGENT_VOLUME:/home/piuser/.pi/agent" \
   -v "$CTX_VOLUME:/home/piuser/.pi/context-mode" \
