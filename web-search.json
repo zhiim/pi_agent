@@ -1,4 +1,5 @@
 {
+  "workflow": "auto-summary",
   "ssrf": {
     "allowRanges": ["198.18.0.1/16", "fdfe:dcba:9876::1/64"]
   }
