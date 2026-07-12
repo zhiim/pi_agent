@@ -133,7 +133,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   }
 
   function togglePlanMode(ctx: ExtensionContext): void {
-    planModeEnabled = !planModeEnabled;
+    // Execution mode is a sub-phase of the plan workflow.
+    // Toggling during either phase exits the entire workflow.
+    const wasInPlanWorkflow = planModeEnabled || executionMode;
+
+    planModeEnabled = !wasInPlanWorkflow;
     executionMode = false;
     todoItems = [];
 
