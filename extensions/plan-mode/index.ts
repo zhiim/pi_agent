@@ -115,9 +115,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   function restoreNormalModeTools(): void {
     if (toolsBeforePlanMode === undefined) {
-      throw new Error(
-        "restoreNormalModeTools: toolsBeforePlanMode is undefined",
-      );
+      // toolsBeforePlanMode being undefined means tools have already been restored
+      return;
     }
     pi.setActiveTools(toolsBeforePlanMode);
     toolsBeforePlanMode = undefined;
@@ -395,6 +394,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
     const entries = ctx.sessionManager.getEntries();
 
     // Restore persisted state
+    // only if the resumed session have saved "plan-mode" entry
     const planModeEntry = entries
       .filter(
         (e: { type: string; customType?: string }) =>
@@ -424,20 +424,22 @@ After completing a step, include a [DONE:n] tag in your response.`;
         }
       }
 
-      // Only scan messages after the execute marker
-      const messages: AssistantMessage[] = [];
-      for (let i = executeIndex + 1; i < entries.length; i++) {
-        const entry = entries[i];
-        if (
-          entry.type === "message" &&
-          "message" in entry &&
-          isAssistantMessage(entry.message as AgentMessage)
-        ) {
-          messages.push(entry.message as AssistantMessage);
+      if (executeIndex >= 0) {
+        // Only scan messages after the execute marker
+        const messages: AssistantMessage[] = [];
+        for (let i = executeIndex + 1; i < entries.length; i++) {
+          const entry = entries[i];
+          if (
+            entry.type === "message" &&
+            "message" in entry &&
+            isAssistantMessage(entry.message as AgentMessage)
+          ) {
+            messages.push(entry.message as AssistantMessage);
+          }
         }
+        const allText = messages.map(getTextContent).join("\n");
+        markCompletedSteps(allText, todoItems);
       }
-      const allText = messages.map(getTextContent).join("\n");
-      markCompletedSteps(allText, todoItems);
     }
 
     if (planModeEnabled) {
