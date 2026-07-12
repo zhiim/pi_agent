@@ -162,9 +162,12 @@ function getBuiltinModel(modelInfo: {
   const builtin = builtins.getModel(vendor, modelId);
   if (builtin) {
     let api = builtin.api;
-    if (vendor !== modelCard.split("/")[0]) {
+    let name = builtin.name;
+    const providerName = modelCard.split("/")[0];
+    if (vendor !== providerName) {
       // if the vendor is not the first part of the model card, it means the model is from a gateway provider
       api = "openai-completions";
+      name = builtin.name + ` (provided by ${providerName})`;
     }
 
     let id = modelCard;
@@ -183,6 +186,7 @@ function getBuiltinModel(modelInfo: {
     model = {
       ...builtin,
       id: id,
+      name: name,
       api: api,
       provider: "gateway",
       baseUrl: baseUrl,
