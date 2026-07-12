@@ -1,7 +1,6 @@
 {
   "theme": "catppuccin",
   "packages": [
-    "npm:pi-subagents",
     "npm:pi-web-access",
     "npm:pi-mcp-adapter",
     "npm:context-mode",
