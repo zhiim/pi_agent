@@ -73,6 +73,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   let planModeEnabled = false;
   let executionMode = false;
   let todoItems: TodoItem[] = [];
+  let executionProgressedThisRun = false;
   let toolsBeforePlanMode: string[] | undefined; // available tools before plan mode was enabled
 
   pi.registerFlag("plan", {
@@ -150,6 +151,25 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     });
   }
 
+  function queueNextStep(display: boolean): void {
+    const remaining = todoItems.filter((item) => !item.completed);
+    if (remaining.length === 0) return;
+
+    const execMessage = readPromptFile(`${RESOURCE_PATH}/execute_next.md`, {
+      TODO_LIST: remaining
+        .map((item) => `${item.step}. ${item.text}`)
+        .join("\n"),
+    });
+    pi.sendMessage(
+      {
+        customType: "plan-mode-execute",
+        content: execMessage,
+        display,
+      },
+      { triggerTurn: true, deliverAs: "followUp" },
+    );
+  }
+
   function togglePlanMode(ctx: ExtensionContext): void {
     // Execution mode is a sub-phase of the plan workflow.
     // Toggling during either phase exits the entire workflow.
@@ -158,6 +178,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     planModeEnabled = !wasInPlanWorkflow;
     executionMode = false;
     todoItems = [];
+    executionProgressedThisRun = false;
 
     if (planModeEnabled) {
       enablePlanModeTools();
@@ -298,8 +319,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     if (!executionMode || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
 
-    const text = getTextContent(event.message);
-    if (markCompletedSteps(text, todoItems) > 0) {
+    const completedBefore = todoItems.filter((item) => item.completed).length;
+    markCompletedSteps(getTextContent(event.message), todoItems);
+    const completedAfter = todoItems.filter((item) => item.completed).length;
+
+    if (completedAfter > completedBefore) {
+      executionProgressedThisRun = true;
       updateStatus(ctx);
     }
     persistState();
@@ -307,10 +332,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   // Handle plan completion and plan mode UI
   pi.on("agent_end", async (event, ctx) => {
-    // Check if execution is complete
+    // Complete the workflow, continue after verified progress, or pause when
+    // the current step did not produce a valid completion marker.
     if (executionMode && todoItems.length > 0) {
-      if (todoItems.every((t) => t.completed)) {
-        const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
+      if (todoItems.every((item) => item.completed)) {
+        const completedList = todoItems
+          .map((item) => `~~${item.text}~~`)
+          .join("\n");
         pi.sendMessage(
           {
             customType: "plan-complete",
@@ -321,8 +349,22 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         );
         executionMode = false;
         todoItems = [];
+        executionProgressedThisRun = false;
         updateStatus(ctx);
         persistState(); // Save cleared state so resume doesn't restore old execution mode
+        return;
+      }
+
+      const shouldContinue = executionProgressedThisRun;
+      executionProgressedThisRun = false;
+
+      if (shouldContinue) {
+        queueNextStep(false);
+      } else if (ctx.hasUI) {
+        ctx.ui.notify(
+          "Plan execution paused: the current step was not confirmed complete.",
+          "warning",
+        );
       }
       return;
     }
@@ -365,25 +407,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
       planModeEnabled = false;
       executionMode = true;
+      executionProgressedThisRun = false;
       restoreNormalModeTools();
       updateStatus(ctx);
       persistState();
 
-      const remainingList = todoItems
-        .map((t) => `${t.step}. ${t.text}`)
-        .join("\n");
-      const execMessage = readPromptFile(`${RESOURCE_PATH}/execute_next.md`, {
-        TODO_LIST: remainingList,
-      });
       pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-      pi.sendMessage(
-        {
-          customType: "plan-mode-execute",
-          content: execMessage,
-          display: true,
-        },
-        { triggerTurn: true, deliverAs: "followUp" },
-      );
+      queueNextStep(true);
     } else if (choice === "Refine the plan") {
       const refinement = await ctx.ui.editor("Refine the plan:", "");
       if (refinement?.trim()) {
