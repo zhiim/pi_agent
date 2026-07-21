@@ -67,7 +67,10 @@ export function filterPlanModeContextMessages<T extends PlanModeContextMessage>(
       );
     }
 
-    if (message.role === "user" && containsInternalTextMarker(message.content)) {
+    if (
+      message.role === "user" &&
+      containsInternalTextMarker(message.content)
+    ) {
       return false;
     }
     return true;

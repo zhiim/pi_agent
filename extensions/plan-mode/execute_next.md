@@ -8,5 +8,5 @@ Execute the following plan step.
 
 ## REQUIREMENTS
 
-- After successful completion, return exactly `[DONE:n]`. Replace n with the immutable ID of the selected step..
+- After successful completion, return exactly `[DONE:n]`. Replace n with the immutable ID of the selected step.
 - If the step is incomplete, partially successful, skipped, or only analyzed, do not return the DONE tag.
