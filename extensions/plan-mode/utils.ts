@@ -2,6 +2,7 @@
  * Pure utility functions for plan mode.
  * Extracted for testability.
  */
+import fs from "node:fs";
 
 // Destructive commands blocked in plan mode
 const DESTRUCTIVE_PATTERNS = [
@@ -170,4 +171,32 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
     if (item) item.completed = true;
   }
   return doneSteps.length;
+}
+
+function renderPrompt(
+  template: string,
+  variables: Record<string, unknown>,
+): string {
+  const rendered = template.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (_, key) => {
+    if (!Object.hasOwn(variables, key)) {
+      throw new Error(`Prompt variable not provided: ${key}`);
+    }
+    const value = variables[key];
+    if (value === undefined || value === null) {
+      throw new Error(`Prompt variable is null or undefined: ${key}`);
+    }
+
+    return String(value);
+  });
+
+  return rendered;
+}
+
+export function readPromptFile(
+  filePath: string,
+  variables?: Record<string, unknown>,
+): string {
+  const template = fs.readFileSync(filePath, "utf-8");
+  if (!variables) return template;
+  return renderPrompt(template, variables);
 }

@@ -22,8 +22,11 @@ import {
   extractTodoItems,
   isSafeCommand,
   markCompletedSteps,
+  readPromptFile,
   type TodoItem,
 } from "./utils.ts";
+
+const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
 
 // Built-in read-only tools that are always activated in plan mode.
 const PLAN_MODE_REQUIRED_TOOLS = ["read", "bash", "grep", "find", "ls"];
@@ -267,25 +270,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       return {
         message: {
           customType: "plan-mode-context",
-          content: `[PLAN MODE ACTIVE]
-You are in plan mode - a read-only exploration mode for safe code analysis.
-
-Restrictions:
-- Only explicitly allowlisted read/search tools are available
-- Mutation-capable, unknown extension, and MCP tools are blocked
-- Bash is restricted to an allowlist of read-only commands
-
-Ask clarifying questions using the ask_user_question tool.
-Use web_search tool for web research.
-
-Create a detailed numbered plan under a "Plan:" header:
-
-Plan:
-1. First step description
-2. Second step description
-...
-
-Do NOT attempt to make changes - just describe what you would do.`,
+          content: readPromptFile(`${RESOURCE_PATH}/plan_mode.md`),
           display: false,
         },
       };
@@ -297,13 +282,11 @@ Do NOT attempt to make changes - just describe what you would do.`,
       return {
         message: {
           customType: "plan-execution-context",
-          content: `[EXECUTING PLAN - Full tool access enabled]
-
-Remaining steps:
-${todoList}
-
-Execute each step in order.
-After completing a step, include a [DONE:n] tag in your response.`,
+          content: readPromptFile(`${RESOURCE_PATH}/execute_step.md`, {
+            TODO_LIST: todoList,
+            STEP_ID: remaining[0].step.toString(),
+            STEP_TEXT: remaining[0].text,
+          }),
           display: false,
         },
       };
@@ -389,13 +372,9 @@ After completing a step, include a [DONE:n] tag in your response.`,
       const remainingList = todoItems
         .map((t) => `${t.step}. ${t.text}`)
         .join("\n");
-      const execMessage = `Execute the plan.
-
-Remaining steps:
-${remainingList}
-
-Start with: ${firstTodoItem.text}
-After completing a step, include a [DONE:n] tag in your response.`;
+      const execMessage = readPromptFile(`${RESOURCE_PATH}/execute_next.md`, {
+        TODO_LIST: remainingList,
+      });
       pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
       pi.sendMessage(
         {
