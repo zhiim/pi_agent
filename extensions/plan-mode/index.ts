@@ -20,6 +20,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   extractTodoItems,
+  filterPlanModeContextMessages,
   isSafeCommand,
   markCurrentStepCompleted,
   readPromptFile,
@@ -246,52 +247,16 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     }
   });
 
-  // Filter stale injected instructions based on current mode.
-  // plan-todo-list / plan-complete are display-only, never filtered.
-  // ── planModeEnabled ──► keep everything
-  // ── executionMode   ──► filter plan injections, keep execution injections
-  // ── otherwise        ──► filter both
-  const PLAN_INJECT_TYPES = new Set(["plan-mode-context"]);
-  const EXEC_INJECT_TYPES = new Set([
-    "plan-execution-context",
-    "plan-mode-execute",
-  ]);
-  const PLAN_TEXT_MARKERS = ["[PLAN MODE ACTIVE]"];
-  const EXEC_TEXT_MARKERS = ["[EXECUTING PLAN"];
-
-  pi.on("context", async (event) => {
-    if (planModeEnabled) return;
-
-    const staleTypes = new Set(PLAN_INJECT_TYPES);
-    const staleMarkers = [...PLAN_TEXT_MARKERS];
-    if (!executionMode) {
-      for (const t of EXEC_INJECT_TYPES) staleTypes.add(t);
-      staleMarkers.push(...EXEC_TEXT_MARKERS);
-    }
-
-    return {
-      messages: event.messages.filter((m) => {
-        const msg = m as AgentMessage & { customType?: string };
-        if (staleTypes.has(msg.customType ?? "")) return false;
-        if (msg.role !== "user") return true;
-
-        const content = msg.content;
-        if (typeof content === "string") {
-          return !staleMarkers.some((marker) => content.includes(marker));
-        }
-        if (Array.isArray(content)) {
-          return !content.some(
-            (c) =>
-              c.type === "text" &&
-              staleMarkers.some((marker) =>
-                (c as TextContent).text?.includes(marker),
-              ),
-          );
-        }
-        return true;
-      }),
-    };
-  });
+  // Keep only the newest instruction for the active phase. Historical
+  // execution prompts and display messages remain in the transcript but are
+  // excluded from model context so a new plan cannot inherit stale steps.
+  pi.on("context", async (event) => ({
+    messages: filterPlanModeContextMessages(
+      event.messages,
+      planModeEnabled,
+      executionMode,
+    ),
+  }));
 
   // Inject plan/execution context before agent starts
   pi.on("before_agent_start", async () => {

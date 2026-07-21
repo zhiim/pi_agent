@@ -4,6 +4,76 @@
  */
 import fs from "node:fs";
 
+interface PlanModeContextMessage {
+  role: string;
+  content?: unknown;
+  customType?: string;
+}
+
+const PLAN_CONTEXT_TYPE = "plan-mode-context";
+const EXECUTION_CONTEXT_TYPE = "plan-execution-context";
+const INTERNAL_CONTEXT_TYPES = new Set([
+  PLAN_CONTEXT_TYPE,
+  EXECUTION_CONTEXT_TYPE,
+  "plan-mode-execute",
+  "plan-todo-list",
+  "plan-complete",
+]);
+const INTERNAL_TEXT_MARKERS = ["[PLAN MODE ACTIVE]", "[EXECUTING PLAN"];
+
+function containsInternalTextMarker(content: unknown): boolean {
+  if (typeof content === "string") {
+    return INTERNAL_TEXT_MARKERS.some((marker) => content.includes(marker));
+  }
+  if (!Array.isArray(content)) return false;
+
+  return content.some((block) => {
+    if (typeof block !== "object" || block === null) return false;
+    const textBlock = block as { type?: unknown; text?: unknown };
+    return (
+      textBlock.type === "text" &&
+      typeof textBlock.text === "string" &&
+      INTERNAL_TEXT_MARKERS.some((marker) => textBlock.text.includes(marker))
+    );
+  });
+}
+
+export function filterPlanModeContextMessages<T extends PlanModeContextMessage>(
+  messages: readonly T[],
+  planModeEnabled: boolean,
+  executionMode: boolean,
+): T[] {
+  const activeContextType = planModeEnabled
+    ? PLAN_CONTEXT_TYPE
+    : executionMode
+      ? EXECUTION_CONTEXT_TYPE
+      : undefined;
+  let latestActiveContextIndex = -1;
+
+  if (activeContextType) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index]?.customType === activeContextType) {
+        latestActiveContextIndex = index;
+        break;
+      }
+    }
+  }
+
+  return messages.filter((message, index) => {
+    const customType = message.customType ?? "";
+    if (INTERNAL_CONTEXT_TYPES.has(customType)) {
+      return (
+        customType === activeContextType && index === latestActiveContextIndex
+      );
+    }
+
+    if (message.role === "user" && containsInternalTextMarker(message.content)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 // Destructive commands blocked in plan mode
 const DESTRUCTIVE_PATTERNS = [
   /\brm\b/i,
