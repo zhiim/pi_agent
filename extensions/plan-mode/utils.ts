@@ -16,8 +16,6 @@ const INTERNAL_CONTEXT_TYPES = new Set([
   PLAN_CONTEXT_TYPE,
   EXECUTION_CONTEXT_TYPE,
   "plan-mode-execute",
-  "plan-todo-list",
-  "plan-complete",
 ]);
 const INTERNAL_TEXT_MARKERS = ["[PLAN MODE ACTIVE]", "[EXECUTING PLAN"];
 
@@ -43,17 +41,17 @@ export function filterPlanModeContextMessages<T extends PlanModeContextMessage>(
   planModeEnabled: boolean,
   executionMode: boolean,
 ): T[] {
-  const activeContextType = planModeEnabled
-    ? PLAN_CONTEXT_TYPE
+  const activeInstructionTypes = planModeEnabled
+    ? new Set([PLAN_CONTEXT_TYPE])
     : executionMode
-      ? EXECUTION_CONTEXT_TYPE
-      : undefined;
-  let latestActiveContextIndex = -1;
+      ? new Set([EXECUTION_CONTEXT_TYPE, "plan-mode-execute"])
+      : new Set<string>();
+  let latestActiveInstructionIndex = -1;
 
-  if (activeContextType) {
+  if (activeInstructionTypes.size > 0) {
     for (let index = messages.length - 1; index >= 0; index--) {
-      if (messages[index]?.customType === activeContextType) {
-        latestActiveContextIndex = index;
+      if (activeInstructionTypes.has(messages[index]?.customType ?? "")) {
+        latestActiveInstructionIndex = index;
         break;
       }
     }
@@ -63,7 +61,8 @@ export function filterPlanModeContextMessages<T extends PlanModeContextMessage>(
     const customType = message.customType ?? "";
     if (INTERNAL_CONTEXT_TYPES.has(customType)) {
       return (
-        customType === activeContextType && index === latestActiveContextIndex
+        activeInstructionTypes.has(customType) &&
+        index === latestActiveInstructionIndex
       );
     }
 

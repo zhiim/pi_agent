@@ -9,7 +9,8 @@ TOOL POLICY
 - Bash commands must be limited to the configured read-only allowlist.
 - Use `web_search` only when external research is necessary.
 - Use `ask_user_question` only when missing information prevents you from producing a valid plan.
-- If you call `ask_user_question`, do not output a plan in the same response.
+- After `ask_user_question` returns, use the user's answers to complete the plan in the same agent run.
+- The user's answer does not authorize execution; remain read-only and output the required plan.
 
 SECURITY POLICY
 

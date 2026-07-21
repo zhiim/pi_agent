@@ -160,15 +160,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     });
   }
 
-  function queueNextStep(display: boolean): void {
+  function buildExecutionStepPrompt(): string | undefined {
     const remaining = todoItems.filter((item) => !item.completed);
-    if (remaining.length === 0) return;
+    const currentStep = remaining[0];
+    if (!currentStep) return undefined;
 
-    const execMessage = readPromptFile(`${RESOURCE_PATH}/execute_next.md`, {
+    return readPromptFile(`${RESOURCE_PATH}/execute_step.md`, {
       TODO_LIST: remaining
         .map((item) => `${item.step}. ${item.text}`)
         .join("\n"),
+      STEP_ID: currentStep.step.toString(),
+      STEP_TEXT: currentStep.text,
     });
+  }
+
+  function queueNextStep(display: boolean): void {
+    const execMessage = buildExecutionStepPrompt();
+    if (!execMessage) return;
+
     pi.sendMessage(
       {
         customType: "plan-mode-execute",
@@ -271,16 +280,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     }
 
     if (executionMode && todoItems.length > 0) {
-      const remaining = todoItems.filter((t) => !t.completed);
-      const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
+      const execMessage = buildExecutionStepPrompt();
+      if (!execMessage) return;
+
       return {
         message: {
           customType: "plan-execution-context",
-          content: readPromptFile(`${RESOURCE_PATH}/execute_step.md`, {
-            TODO_LIST: todoList,
-            STEP_ID: remaining[0].step.toString(),
-            STEP_TEXT: remaining[0].text,
-          }),
+          content: execMessage,
           display: false,
         },
       };
@@ -305,17 +311,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     // the current step did not produce a valid completion marker.
     if (executionMode && todoItems.length > 0) {
       if (todoItems.every((item) => item.completed)) {
-        const completedList = todoItems
-          .map((item) => `~~${item.text}~~`)
-          .join("\n");
-        pi.sendMessage(
-          {
-            customType: "plan-complete",
-            content: `**Plan Complete!** \n\n${completedList}`,
-            display: true,
-          },
-          { triggerTurn: false },
-        );
+        if (ctx.hasUI) {
+          ctx.ui.notify("Plan complete.", "info");
+        }
         executionMode = false;
         todoItems = [];
         executionProgressedThisRun = false;
@@ -354,16 +352,6 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     if (todoItems.length === 0) return;
     persistState();
 
-    // Show plan steps and prompt for next action
-    const todoListText = todoItems
-      .map((t, i) => `${i + 1}. 󰄱 ${t.text}`)
-      .join("\n");
-    const planTodoListMessage = {
-      customType: "plan-todo-list",
-      content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
-      display: true,
-    };
-
     const choice = await ctx.ui.select("Plan mode - what next?", [
       "Execute the plan (track progress)",
       "Stay in plan mode",
@@ -371,9 +359,6 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     ]);
 
     if (choice?.startsWith("Execute")) {
-      const firstTodoItem = todoItems[0];
-      if (!firstTodoItem) return;
-
       planModeEnabled = false;
       executionMode = true;
       executionProgressedThisRun = false;
@@ -381,12 +366,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       updateStatus(ctx);
       persistState();
 
-      pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
+      // agent_end still runs while the agent is streaming. Queue exactly one
+      // follow-up so the first continuation receives the selected step rather
+      // than a display-only todo message.
       queueNextStep(true);
     } else if (choice === "Refine the plan") {
       const refinement = await ctx.ui.editor("Refine the plan:", "");
       if (refinement?.trim()) {
-        pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
         pi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
       }
     }
