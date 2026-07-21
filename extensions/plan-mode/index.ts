@@ -21,7 +21,7 @@ import type {
 import {
   extractTodoItems,
   isSafeCommand,
-  markCompletedSteps,
+  markCurrentStepCompleted,
   readPromptFile,
   type TodoItem,
 } from "./utils.ts";
@@ -67,6 +67,14 @@ function getTextContent(message: AssistantMessage): string {
     .filter((block): block is TextContent => block.type === "text")
     .map((block) => block.text)
     .join("\n");
+}
+
+function markCompletedStepFromMessage(
+  message: AssistantMessage,
+  items: TodoItem[],
+): boolean {
+  if (message.stopReason !== "stop") return false;
+  return markCurrentStepCompleted(getTextContent(message), items);
 }
 
 export default function planModeExtension(pi: ExtensionAPI): void {
@@ -319,11 +327,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     if (!executionMode || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
 
-    const completedBefore = todoItems.filter((item) => item.completed).length;
-    markCompletedSteps(getTextContent(event.message), todoItems);
-    const completedAfter = todoItems.filter((item) => item.completed).length;
-
-    if (completedAfter > completedBefore) {
+    if (markCompletedStepFromMessage(event.message, todoItems)) {
       executionProgressedThisRun = true;
       updateStatus(ctx);
     }
@@ -429,7 +433,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       planModeEnabled = true;
     }
 
-    const entries = ctx.sessionManager.getEntries();
+    const entries = ctx.sessionManager.getBranch();
 
     // Restore persisted state
     // only if the resumed session have saved "plan-mode" entry
@@ -475,8 +479,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
             messages.push(entry.message as AssistantMessage);
           }
         }
-        const allText = messages.map(getTextContent).join("\n");
-        markCompletedSteps(allText, todoItems);
+        for (const message of messages) {
+          if (markCompletedStepFromMessage(message, todoItems)) break;
+        }
       }
     }
 
