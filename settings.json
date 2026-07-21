@@ -7,6 +7,7 @@
     "npm:@ff-labs/pi-fff",
     "npm:@ayulab/pi-rewind",
     "npm:@gotgenes/pi-permission-system",
-    "npm:pi-tool-display"
+    "npm:pi-tool-display",
+    "npm:@juicesharp/rpiv-ask-user-question"
   ]
 }

@@ -2,7 +2,7 @@
  * Plan Mode Extension
  *
  * Read-only exploration mode for safe code analysis.
- * When enabled, built-in write tools are disabled.
+ * When enabled, only an explicit allowlist of read/search tools is available.
  *
  * Features:
  * - /plan command to toggle
@@ -25,10 +25,26 @@ import {
   type TodoItem,
 } from "./utils.ts";
 
-// Tools ensure to be included in plan mode
-const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls"];
-// Tools disabled in plan mode
-const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write"]);
+// Built-in read-only tools that are always activated in plan mode.
+const PLAN_MODE_REQUIRED_TOOLS = ["read", "bash", "grep", "find", "ls"];
+
+// Optional read/search tools are retained only when they were already active.
+// Keep this list explicit: unknown extension and MCP tools may have side effects.
+const PLAN_MODE_OPTIONAL_TOOLS = [
+  "fffind",
+  "ffgrep",
+  "web_search",
+  "fetch_content",
+  "get_search_content",
+  "ctx_search",
+  "ctx_stats",
+  "ask_user_question",
+];
+
+const PLAN_MODE_ALLOWED_TOOLS = new Set<string>([
+  ...PLAN_MODE_REQUIRED_TOOLS,
+  ...PLAN_MODE_OPTIONAL_TOOLS,
+]);
 
 interface PlanModeState {
   enabled: boolean;
@@ -100,8 +116,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   function getPlanModeTools(activeToolNames: string[]): string[] {
     return uniqueToolNames([
-      ...activeToolNames.filter((name) => !PLAN_MODE_DISABLED_TOOLS.has(name)),
-      ...PLAN_MODE_TOOLS,
+      ...activeToolNames.filter((name) => PLAN_MODE_ALLOWED_TOOLS.has(name)),
+      ...PLAN_MODE_REQUIRED_TOOLS,
     ]);
   }
 
@@ -142,7 +158,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
     if (planModeEnabled) {
       enablePlanModeTools();
-      ctx.ui.notify("Plan mode enabled. Built-in write tools disabled.");
+      ctx.ui.notify(
+        "Plan mode enabled. Tools restricted to read-only allowlist.",
+      );
     } else {
       restoreNormalModeTools();
       ctx.ui.notify("Plan mode disabled. Full access restored.");
@@ -172,9 +190,20 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     },
   });
 
-  // Block destructive bash commands in plan mode
+  // Defense in depth: active-tool filtering hides disallowed tools from the
+  // model, while this hook blocks stale, injected, or dynamically activated
+  // tools that bypass the filtered tool list.
   pi.on("tool_call", async (event) => {
-    if (!planModeEnabled || event.toolName !== "bash") return;
+    if (!planModeEnabled) return;
+
+    if (!PLAN_MODE_ALLOWED_TOOLS.has(event.toolName)) {
+      return {
+        block: true,
+        reason: `Plan mode: tool '${event.toolName}' is not in the read-only allowlist. Use /plan to disable plan mode first.`,
+      };
+    }
+
+    if (event.toolName !== "bash") return;
 
     const command = event.input.command as string;
     if (!isSafeCommand(command)) {
@@ -242,12 +271,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 You are in plan mode - a read-only exploration mode for safe code analysis.
 
 Restrictions:
-- Built-in edit and write tools are disabled
-- Other currently active tools remain available
+- Only explicitly allowlisted read/search tools are available
+- Mutation-capable, unknown extension, and MCP tools are blocked
 - Bash is restricted to an allowlist of read-only commands
 
-Ask clarifying questions using the questionnaire tool.
-Use brave-search skill via bash for web research.
+Ask clarifying questions using the ask_user_question tool.
+Use web_search tool for web research.
 
 Create a detailed numbered plan under a "Plan:" header:
 

@@ -7,7 +7,8 @@
       "*.env": "deny",
       "*.env.*": "deny",
       "*.env.example": "allow",
-      "~/.ssh/*": "deny"
+      "~/.ssh/*": "deny",
+      "/tmp/pi-github-repos": "allow"
     },
     "external_directory": "ask",
     "read": {
@@ -44,6 +45,15 @@
       "rm -rf *": "ask",
       "sudo *": "ask"
     },
+    "fffind": "allow",
+    "ffgrep": "allow",
+    "web_search": "allow",
+    "fetch_content": "allow",
+    "get_search_content": "allow",
+    "ctx_stats": "allow",
+    "ctx_doctor": "allow",
+    "ctx_search": "allow",
+    "ask_user_question": "allow",
     "third_party_tool": "ask",
     "mcp": {
       "*": "ask",
@@ -53,7 +63,10 @@
       "mcp_describe": "allow"
     },
     "skill": {
-      "*": "ask"
+      "*": "ask",
+      "librarian": "allow",
+      "context-mode": "allow",
+      "ctx-*": "allow"
     }
   }
 }
