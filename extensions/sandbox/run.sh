@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_VOLUME="pi-agent-home"
 CTX_VOLUME="pi-context-mode"
+RUNTIME_VOLUME="pi-runtime"
 IMAGE="pi-agent-sandbox"
 
 # if a directory argument is provided, use it as the project directory,
@@ -22,6 +23,7 @@ fi
 
 docker volume create "$AGENT_VOLUME" >/dev/null
 docker volume create "$CTX_VOLUME" >/dev/null
+docker volume create "$RUNTIME_VOLUME" >/dev/null
 
 docker run --rm -it \
   -e "PROVIDER_BASE_URL=$PROVIDER_BASE_URL" \
@@ -31,6 +33,7 @@ docker run --rm -it \
   -v "$BASE_DIR/seed:/seed:ro" \
   -v "$AGENT_VOLUME:/home/piuser/.pi/agent" \
   -v "$CTX_VOLUME:/home/piuser/.pi/context-mode" \
+  -v "$RUNTIME_VOLUME:/home/piuser/.pi/runtime" \
   -v "$PROJECT_DIR:/workspace" \
   -w /workspace \
   "$IMAGE" "$@"

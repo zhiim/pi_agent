@@ -28,7 +28,9 @@ RUN if getent passwd "${UID}" >/dev/null; then userdel -r "$(getent passwd "${UI
   && groupadd -g "${GID}" piuser \
   && useradd -m -u "${UID}" -g "${GID}" -s /bin/bash piuser
 
-RUN mkdir -p /home/piuser/.pi/agent /home/piuser/.pi/context-mode \
+RUN mkdir -p /home/piuser/.pi/agent \
+  /home/piuser/.pi/context-mode \
+  /home/piuser/.pi/runtime \
   && chown -R piuser:piuser /home/piuser/.pi
 
 COPY pi-entrypoint.sh /usr/local/bin/pi-entrypoint.sh
