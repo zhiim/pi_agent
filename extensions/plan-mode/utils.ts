@@ -204,7 +204,7 @@ export function markCurrentStepCompleted(
   const currentStep = items.find((item) => !item.completed);
   if (!currentStep) return false;
 
-  const completionMatch = text.trim().match(/\[DONE:(\d+)\]/);
+  const completionMatch = text.match(/^[^\S\r\n]*\[DONE:(\d+)\][^\S\r\n]*$/m);
   if (!completionMatch || completionMatch[1] !== String(currentStep.step)) {
     return false;
   }
