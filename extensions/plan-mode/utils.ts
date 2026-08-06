@@ -202,7 +202,10 @@ export function markCurrentStepCompleted(
   items: TodoItem[],
 ): boolean {
   const currentStep = items.find((item) => !item.completed);
-  if (!currentStep || text.trim() !== `[DONE:${currentStep.step}]`) {
+  if (!currentStep) return false;
+
+  const completionMatch = text.trim().match(/\[DONE:(\d+)\]/);
+  if (!completionMatch || completionMatch[1] !== String(currentStep.step)) {
     return false;
   }
 
