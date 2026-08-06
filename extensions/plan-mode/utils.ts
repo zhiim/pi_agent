@@ -3,6 +3,7 @@
  * Extracted for testability.
  */
 import fs from "node:fs";
+import { PlanWorkflowState } from "./workflow.ts";
 
 interface PlanModeContextMessage {
   role: string;
@@ -28,24 +29,35 @@ function containsInternalTextMarker(content: unknown): boolean {
   return content.some((block) => {
     if (typeof block !== "object" || block === null) return false;
     const textBlock = block as { type?: unknown; text?: unknown };
+    const text = textBlock.text;
     return (
       textBlock.type === "text" &&
-      typeof textBlock.text === "string" &&
-      INTERNAL_TEXT_MARKERS.some((marker) => textBlock.text.includes(marker))
+      typeof text === "string" &&
+      INTERNAL_TEXT_MARKERS.some((marker) => text.includes(marker))
     );
   });
 }
 
 export function filterPlanModeContextMessages<T extends PlanModeContextMessage>(
   messages: readonly T[],
-  planModeEnabled: boolean,
-  executionMode: boolean,
+  state: PlanWorkflowState,
 ): T[] {
-  const activeInstructionTypes = planModeEnabled
-    ? new Set([PLAN_CONTEXT_TYPE])
-    : executionMode
-      ? new Set([EXECUTION_CONTEXT_TYPE, "plan-mode-execute"])
-      : new Set<string>();
+  let activeInstructionTypes: ReadonlySet<string> = new Set();
+  switch (state) {
+    case PlanWorkflowState.Planning:
+    case PlanWorkflowState.AwaitingApproval:
+      activeInstructionTypes = new Set([PLAN_CONTEXT_TYPE]);
+      break;
+    case PlanWorkflowState.Executing:
+    case PlanWorkflowState.Paused:
+      activeInstructionTypes = new Set([
+        EXECUTION_CONTEXT_TYPE,
+        "plan-mode-execute",
+      ]);
+      break;
+    case PlanWorkflowState.Off:
+      break;
+  }
   let latestActiveInstructionIndex = -1;
 
   if (activeInstructionTypes.size > 0) {

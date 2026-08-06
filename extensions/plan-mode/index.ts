@@ -26,6 +26,14 @@ import {
   readPromptFile,
   type TodoItem,
 } from "./utils.ts";
+import {
+  isExecutionState,
+  isPlanWorkflowActive,
+  isReadOnlyPlanningState,
+  PlanWorkflowState,
+  restorePlanWorkflowState,
+  transitionPlanWorkflow,
+} from "./workflow.ts";
 
 const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
 
@@ -50,11 +58,13 @@ const PLAN_MODE_ALLOWED_TOOLS = new Set<string>([
   ...PLAN_MODE_OPTIONAL_TOOLS,
 ]);
 
-interface PlanModeState {
-  enabled: boolean;
+interface PersistedPlanModeState {
+  state?: PlanWorkflowState;
   todos?: TodoItem[];
-  executing?: boolean;
   toolsBeforePlanMode?: string[];
+  // Legacy fields retained only for migrating sessions saved before the state machine.
+  enabled?: boolean;
+  executing?: boolean;
 }
 
 // Type guard for assistant messages
@@ -79,11 +89,14 @@ function markCompletedStepFromMessage(
 }
 
 export default function planModeExtension(pi: ExtensionAPI): void {
-  let planModeEnabled = false;
-  let executionMode = false;
+  let workflowState = PlanWorkflowState.Off;
   let todoItems: TodoItem[] = [];
   let executionProgressedThisRun = false;
   let toolsBeforePlanMode: string[] | undefined; // available tools before plan mode was enabled
+
+  function transitionWorkflowState(nextState: PlanWorkflowState): void {
+    workflowState = transitionPlanWorkflow(workflowState, nextState);
+  }
 
   pi.registerFlag("plan", {
     description: "Start in plan mode (read-only exploration)",
@@ -91,36 +104,60 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     default: false,
   });
 
-  /** Set status bar and widget to show plan mode and executing status */
+  /** Keep the footer and todo widget aligned with the workflow state. */
   function updateStatus(ctx: ExtensionContext): void {
-    // Footer status
-    if (executionMode && todoItems.length > 0) {
-      const completed = todoItems.filter((t) => t.completed).length;
-      ctx.ui.setStatus(
-        "plan-mode",
-        ctx.ui.theme.fg("accent", ` ${completed}/${todoItems.length}`),
-      );
-    } else if (planModeEnabled) {
-      ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", " plan"));
-    } else {
-      ctx.ui.setStatus("plan-mode", undefined);
+    const completed = todoItems.filter((item) => item.completed).length;
+
+    switch (workflowState) {
+      case PlanWorkflowState.Planning:
+        ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", " plan"));
+        break;
+      case PlanWorkflowState.AwaitingApproval:
+        ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", " approval"));
+        break;
+      case PlanWorkflowState.Executing:
+        ctx.ui.setStatus(
+          "plan-mode",
+          ctx.ui.theme.fg("accent", ` ${completed}/${todoItems.length}`),
+        );
+        break;
+      case PlanWorkflowState.Paused:
+        ctx.ui.setStatus(
+          "plan-mode",
+          ctx.ui.theme.fg("warning", ` ${completed}/${todoItems.length}`),
+        );
+        break;
+      case PlanWorkflowState.Off:
+        ctx.ui.setStatus("plan-mode", undefined);
+        break;
     }
 
-    // Widget showing todo list
-    if (executionMode && todoItems.length > 0) {
-      const lines = todoItems.map((item) => {
-        if (item.completed) {
-          return (
-            ctx.ui.theme.fg("success", "󰄵 ") +
-            ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
-          );
-        }
-        return `${ctx.ui.theme.fg("muted", "󰄱 ")}${item.text}`;
-      });
-      ctx.ui.setWidget("plan-todos", lines);
-    } else {
+    const showTodos =
+      todoItems.length > 0 &&
+      (workflowState === PlanWorkflowState.AwaitingApproval ||
+        isExecutionState(workflowState));
+    if (!showTodos) {
       ctx.ui.setWidget("plan-todos", undefined);
+      return;
     }
+
+    const currentStep = todoItems.find((item) => !item.completed);
+    const lines = todoItems.map((item) => {
+      if (item.completed) {
+        return (
+          ctx.ui.theme.fg("success", "󰄵 ") +
+          ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
+        );
+      }
+      if (workflowState === PlanWorkflowState.Paused && item === currentStep) {
+        return (
+          ctx.ui.theme.fg("warning", " ") +
+          ctx.ui.theme.fg("warning", item.text)
+        );
+      }
+      return `${ctx.ui.theme.fg("muted", "󰄱 ")}${item.text}`;
+    });
+    ctx.ui.setWidget("plan-todos", lines);
   }
 
   function uniqueToolNames(toolNames: string[]): string[] {
@@ -151,11 +188,18 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     toolsBeforePlanMode = undefined;
   }
 
+  function applyToolPolicyForState(): void {
+    if (isReadOnlyPlanningState(workflowState)) {
+      enablePlanModeTools();
+    } else {
+      restoreNormalModeTools();
+    }
+  }
+
   function persistState(): void {
     pi.appendEntry("plan-mode", {
-      enabled: planModeEnabled,
+      state: workflowState,
       todos: todoItems,
-      executing: executionMode,
       toolsBeforePlanMode,
     });
   }
@@ -189,22 +233,21 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   }
 
   function togglePlanMode(ctx: ExtensionContext): void {
-    // Execution mode is a sub-phase of the plan workflow.
-    // Toggling during either phase exits the entire workflow.
-    const wasInPlanWorkflow = planModeEnabled || executionMode;
-
-    planModeEnabled = !wasInPlanWorkflow;
-    executionMode = false;
+    // Toggling from any active phase exits the entire workflow.
+    if (isPlanWorkflowActive(workflowState)) {
+      transitionWorkflowState(PlanWorkflowState.Off);
+    } else {
+      transitionWorkflowState(PlanWorkflowState.Planning);
+    }
     todoItems = [];
     executionProgressedThisRun = false;
 
-    if (planModeEnabled) {
-      enablePlanModeTools();
+    applyToolPolicyForState();
+    if (workflowState === PlanWorkflowState.Planning) {
       ctx.ui.notify(
         "Plan mode enabled. Tools restricted to read-only allowlist.",
       );
     } else {
-      restoreNormalModeTools();
       ctx.ui.notify("Plan mode disabled. Full access restored.");
     }
     updateStatus(ctx);
@@ -236,7 +279,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   // model, while this hook blocks stale, injected, or dynamically activated
   // tools that bypass the filtered tool list.
   pi.on("tool_call", async (event) => {
-    if (!planModeEnabled) return;
+    if (!isReadOnlyPlanningState(workflowState)) return;
 
     if (!PLAN_MODE_ALLOWED_TOOLS.has(event.toolName)) {
       return {
@@ -260,16 +303,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   // execution prompts and display messages remain in the transcript but are
   // excluded from model context so a new plan cannot inherit stale steps.
   pi.on("context", async (event) => ({
-    messages: filterPlanModeContextMessages(
-      event.messages,
-      planModeEnabled,
-      executionMode,
-    ),
+    messages: filterPlanModeContextMessages(event.messages, workflowState),
   }));
 
   // Inject plan/execution context before agent starts
   pi.on("before_agent_start", async () => {
-    if (planModeEnabled) {
+    if (isReadOnlyPlanningState(workflowState)) {
       return {
         message: {
           customType: "plan-mode-context",
@@ -279,7 +318,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       };
     }
 
-    if (executionMode && todoItems.length > 0) {
+    if (isExecutionState(workflowState) && todoItems.length > 0) {
       const execMessage = buildExecutionStepPrompt();
       if (!execMessage) return;
 
@@ -295,7 +334,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   // Track progress after each turn
   pi.on("turn_end", async (event, ctx) => {
-    if (!executionMode || todoItems.length === 0) return;
+    if (!isExecutionState(workflowState) || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
 
     if (markCompletedStepFromMessage(event.message, todoItems)) {
@@ -309,14 +348,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   pi.on("agent_end", async (event, ctx) => {
     // Complete the workflow, continue after verified progress, or pause when
     // the current step did not produce a valid completion marker.
-    if (executionMode && todoItems.length > 0) {
+    if (isExecutionState(workflowState) && todoItems.length > 0) {
       if (todoItems.every((item) => item.completed)) {
         if (ctx.hasUI) {
           ctx.ui.notify("Plan complete.", "info");
         }
-        executionMode = false;
+        transitionWorkflowState(PlanWorkflowState.Off);
         todoItems = [];
         executionProgressedThisRun = false;
+        applyToolPolicyForState();
         updateStatus(ctx);
         persistState(); // Save cleared state so resume doesn't restore old execution mode
         return;
@@ -326,17 +366,31 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       executionProgressedThisRun = false;
 
       if (shouldContinue) {
+        if (workflowState === PlanWorkflowState.Paused) {
+          transitionWorkflowState(PlanWorkflowState.Executing);
+        }
+        applyToolPolicyForState();
+        updateStatus(ctx);
+        persistState();
         queueNextStep(false);
-      } else if (ctx.hasUI) {
-        ctx.ui.notify(
-          "Plan execution paused: the current step was not confirmed complete.",
-          "warning",
-        );
+      } else {
+        if (workflowState === PlanWorkflowState.Executing) {
+          transitionWorkflowState(PlanWorkflowState.Paused);
+        }
+        applyToolPolicyForState();
+        updateStatus(ctx);
+        persistState();
+        if (ctx.hasUI) {
+          ctx.ui.notify(
+            "Plan execution paused: the current step was not confirmed complete.",
+            "warning",
+          );
+        }
       }
       return;
     }
 
-    if (!planModeEnabled || !ctx.hasUI) return;
+    if (!isReadOnlyPlanningState(workflowState) || !ctx.hasUI) return;
 
     // Extract todos from last assistant message
     const lastAssistant = [...event.messages]
@@ -350,6 +404,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     }
 
     if (todoItems.length === 0) return;
+    if (workflowState === PlanWorkflowState.Planning) {
+      transitionWorkflowState(PlanWorkflowState.AwaitingApproval);
+    }
+    applyToolPolicyForState();
+    updateStatus(ctx);
     persistState();
 
     const choice = await ctx.ui.select("Plan mode - what next?", [
@@ -359,10 +418,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     ]);
 
     if (choice?.startsWith("Execute")) {
-      planModeEnabled = false;
-      executionMode = true;
+      transitionWorkflowState(PlanWorkflowState.Executing);
       executionProgressedThisRun = false;
-      restoreNormalModeTools();
+      applyToolPolicyForState();
       updateStatus(ctx);
       persistState();
 
@@ -370,7 +428,16 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       // follow-up so the first continuation receives the selected step rather
       // than a display-only todo message.
       queueNextStep(true);
+    } else if (choice === "Stay in plan mode") {
+      transitionWorkflowState(PlanWorkflowState.Planning);
+      applyToolPolicyForState();
+      updateStatus(ctx);
+      persistState();
     } else if (choice === "Refine the plan") {
+      transitionWorkflowState(PlanWorkflowState.Planning);
+      applyToolPolicyForState();
+      updateStatus(ctx);
+      persistState();
       const refinement = await ctx.ui.editor("Refine the plan:", "");
       if (refinement?.trim()) {
         pi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
@@ -380,8 +447,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   // Restore state on session start/resume
   pi.on("session_start", async (_event, ctx) => {
-    if (pi.getFlag("plan") === true) {
-      planModeEnabled = true;
+    if (
+      pi.getFlag("plan") === true &&
+      workflowState === PlanWorkflowState.Off
+    ) {
+      transitionWorkflowState(PlanWorkflowState.Planning);
     }
 
     const entries = ctx.sessionManager.getBranch();
@@ -393,12 +463,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         (e: { type: string; customType?: string }) =>
           e.type === "custom" && e.customType === "plan-mode",
       )
-      .pop() as { data?: PlanModeState } | undefined;
+      .pop() as { data?: PersistedPlanModeState } | undefined;
 
     if (planModeEntry?.data) {
-      planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
+      workflowState = restorePlanWorkflowState(
+        planModeEntry.data,
+        workflowState,
+      );
       todoItems = planModeEntry.data.todos ?? todoItems;
-      executionMode = planModeEntry.data.executing ?? executionMode;
       toolsBeforePlanMode =
         planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
     }
@@ -406,7 +478,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     // On resume: re-scan messages to rebuild completion state
     // Only scan messages AFTER the last "plan-mode-execute" to avoid picking up [DONE:n] from previous plans
     const isResume = planModeEntry !== undefined;
-    if (isResume && executionMode && todoItems.length > 0) {
+    if (isResume && isExecutionState(workflowState) && todoItems.length > 0) {
       // Find the index of the last plan-mode-execute entry (marks when current execution started)
       let executeIndex = -1;
       for (let i = entries.length - 1; i >= 0; i--) {
@@ -436,9 +508,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       }
     }
 
-    if (planModeEnabled) {
-      enablePlanModeTools();
-    }
+    applyToolPolicyForState();
     updateStatus(ctx);
   });
 }
