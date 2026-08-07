@@ -30,6 +30,11 @@ import {
   type TodoItem,
 } from "./utils.ts";
 import {
+  captureToolsActivatedDuringPlanMode,
+  getPlanModeTools,
+  PLAN_MODE_ALLOWED_TOOLS,
+} from "./tool-policy.ts";
+import {
   isExecutionState,
   isPlanWorkflowActive,
   isReadOnlyPlanningState,
@@ -39,27 +44,6 @@ import {
 } from "./workflow.ts";
 
 const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
-
-// Built-in read-only tools that are always activated in plan mode.
-const PLAN_MODE_REQUIRED_TOOLS = ["read", "bash", "grep", "find", "ls"];
-
-// Optional read/search tools are retained only when they were already active.
-// Keep this list explicit: unknown extension and MCP tools may have side effects.
-const PLAN_MODE_OPTIONAL_TOOLS = [
-  "fffind",
-  "ffgrep",
-  "web_search",
-  "fetch_content",
-  "get_search_content",
-  "ctx_search",
-  "ctx_stats",
-  "ask_user_question",
-];
-
-const PLAN_MODE_ALLOWED_TOOLS = new Set<string>([
-  ...PLAN_MODE_REQUIRED_TOOLS,
-  ...PLAN_MODE_OPTIONAL_TOOLS,
-]);
 
 interface PersistedPlanModeState {
   state?: PlanWorkflowState;
@@ -175,21 +159,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     ctx.ui.setWidget("plan-todos", lines);
   }
 
-  function uniqueToolNames(toolNames: string[]): string[] {
-    return [...new Set(toolNames)];
-  }
+  function captureNewlyActivatedTools(): void {
+    if (toolsBeforePlanMode === undefined) return;
 
-  function getPlanModeTools(activeToolNames: string[]): string[] {
-    return uniqueToolNames([
-      ...activeToolNames.filter((name) => PLAN_MODE_ALLOWED_TOOLS.has(name)),
-      ...PLAN_MODE_REQUIRED_TOOLS,
-    ]);
+    // Tools such as context-mode's ctx_* surface are registered lazily during
+    // before_agent_start. Preserve those additions in the restoration baseline
+    // even though unsafe additions remain hidden while planning.
+    toolsBeforePlanMode = captureToolsActivatedDuringPlanMode(
+      toolsBeforePlanMode,
+      pi.getActiveTools(),
+    );
   }
 
   function enablePlanModeTools(): void {
     if (toolsBeforePlanMode === undefined) {
-      // save all active tools for restoration when back to normal mode
+      // Save all active tools for restoration when back to normal mode.
       toolsBeforePlanMode = pi.getActiveTools();
+    } else {
+      captureNewlyActivatedTools();
     }
     pi.setActiveTools(getPlanModeTools(toolsBeforePlanMode));
   }
@@ -199,6 +186,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       // toolsBeforePlanMode being undefined means tools have already been restored
       return;
     }
+    captureNewlyActivatedTools();
     pi.setActiveTools(toolsBeforePlanMode);
     toolsBeforePlanMode = undefined;
   }
