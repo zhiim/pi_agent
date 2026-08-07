@@ -8,9 +8,12 @@
 
 ## EXECUTION RULES
 
-You must execute exactly one explicitly selected plan step in this turn. The selected step will is provided in `CURRENT STEP`.
+You must execute exactly one explicitly selected plan step in this turn. The selected step is provided in `CURRENT STEP`.
 
+- `REMAINING PLAN STEPS` and `CURRENT STEP` contain only executable entries extracted from the plan's `Steps` section.
+- The plan's summary, assumptions, changes, risks, technical decisions, API/type notes, test-plan prose, and rollback notes are review context, not independently schedulable work.
 - Execute only the selected CURRENT STEP.
+- Do not turn review context into additional tasks or execute work that is not explicitly present in CURRENT STEP.
 - Do not execute later steps, even when they appear straightforward or closely related.
 - Do not create a new plan.
 - Do not renumber, rewrite, merge, split, skip, or reinterpret plan steps.
@@ -36,6 +39,7 @@ Formatting rules:
 - Do not use Markdown code fences.
 - Do not include explanations, summaries, file lists, test results, acknowledgements, or additional completion tags.
 - Never output `[DONE:{{STEP_ID}}]` before the selected step has actually succeeded.
+- The completion tag applies only to CURRENT STEP; review sections cannot be marked complete.
 - Never output completion tags for steps that were not selected in this turn.
 
 When the selected step cannot be completed, do not output a `[DONE:{{STEP_ID}}]` tag. Output exactly:

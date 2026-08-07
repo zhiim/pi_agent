@@ -19,11 +19,13 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  extractTodoItems,
+  extractPlan,
   filterPlanModeContextMessages,
   isSafeCommand,
   markCurrentStepCompleted,
   readPromptFile,
+  type Plan,
+  type PlanStep,
   type TodoItem,
 } from "./utils.ts";
 import {
@@ -60,6 +62,7 @@ const PLAN_MODE_ALLOWED_TOOLS = new Set<string>([
 
 interface PersistedPlanModeState {
   state?: PlanWorkflowState;
+  plan?: Plan;
   todos?: TodoItem[];
   toolsBeforePlanMode?: string[];
   // Legacy fields retained only for migrating sessions saved before the state machine.
@@ -88,8 +91,21 @@ function markCompletedStepFromMessage(
   return markCurrentStepCompleted(getTextContent(message), items);
 }
 
+function createTodoItems(
+  steps: readonly PlanStep[],
+  persistedItems?: readonly TodoItem[],
+): TodoItem[] {
+  return steps.map((step) => ({
+    ...step,
+    completed:
+      persistedItems?.find((item) => item.step === step.step)?.completed === true,
+  }));
+}
+
 export default function planModeExtension(pi: ExtensionAPI): void {
   let workflowState = PlanWorkflowState.Off;
+  // Review-only metadata is persisted for resume but never scheduled directly.
+  let currentPlan: Plan | undefined;
   let todoItems: TodoItem[] = [];
   let executionProgressedThisRun = false;
   let toolsBeforePlanMode: string[] | undefined; // available tools before plan mode was enabled
@@ -199,6 +215,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   function persistState(): void {
     pi.appendEntry("plan-mode", {
       state: workflowState,
+      plan: currentPlan,
       todos: todoItems,
       toolsBeforePlanMode,
     });
@@ -239,6 +256,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     } else {
       transitionWorkflowState(PlanWorkflowState.Planning);
     }
+    currentPlan = undefined;
     todoItems = [];
     executionProgressedThisRun = false;
 
@@ -354,6 +372,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
           ctx.ui.notify("Plan complete.", "info");
         }
         transitionWorkflowState(PlanWorkflowState.Off);
+        currentPlan = undefined;
         todoItems = [];
         executionProgressedThisRun = false;
         applyToolPolicyForState();
@@ -392,14 +411,16 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
     if (!isReadOnlyPlanningState(workflowState) || !ctx.hasUI) return;
 
-    // Extract todos from last assistant message
+    // Parse the complete review document, then derive execution state only
+    // from its explicitly delimited steps.
     const lastAssistant = [...event.messages]
       .reverse()
       .find(isAssistantMessage);
     if (lastAssistant) {
-      const extracted = extractTodoItems(getTextContent(lastAssistant));
-      if (extracted.length > 0) {
-        todoItems = extracted;
+      const extracted = extractPlan(getTextContent(lastAssistant));
+      if (extracted) {
+        currentPlan = extracted;
+        todoItems = createTodoItems(extracted.steps);
       }
     }
 
@@ -470,7 +491,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         planModeEntry.data,
         workflowState,
       );
-      todoItems = planModeEntry.data.todos ?? todoItems;
+      currentPlan = planModeEntry.data.plan ?? currentPlan;
+      // The plan's Steps section remains canonical while persisted todos carry
+      // completion state. Legacy sessions without a plan still restore todos.
+      todoItems = currentPlan
+        ? createTodoItems(currentPlan.steps, planModeEntry.data.todos)
+        : (planModeEntry.data.todos ?? todoItems);
       toolsBeforePlanMode =
         planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
     }

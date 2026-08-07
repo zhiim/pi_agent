@@ -183,13 +183,134 @@ export function isSafeCommand(command: string): boolean {
   return SAFE_PATTERNS.some((pattern) => pattern.test(command));
 }
 
-export interface TodoItem {
+export interface PlanStep {
   step: number;
   text: string;
+}
+
+export interface Plan {
+  summary: string;
+  assumptions: string[];
+  changes: string[];
+  testPlan: string[];
+  steps: PlanStep[];
+}
+
+export interface TodoItem extends PlanStep {
   completed: boolean;
 }
 
+const PLAN_HEADER_PATTERN =
+  /^[^\S\r\n]*(?:#{1,6}[^\S\r\n]+)?\*{0,2}Plan:\*{0,2}[^\S\r\n]*$/im;
+const PLAN_SECTION_NAMES = [
+  "summary",
+  "assumptions",
+  "changes",
+  "testPlan",
+  "steps",
+] as const;
+type PlanSectionName = (typeof PLAN_SECTION_NAMES)[number];
+
+const PLAN_SECTION_HEADER_SOURCE =
+  "^[^\\S\\r\\n]*(?:#{1,6}[^\\S\\r\\n]+)?\\*{0,2}(Summary|Assumptions|Changes|Test Plan|Steps):\\*{0,2}[^\\S\\r\\n]*$";
+
+function normalizePlanSectionName(header: string): PlanSectionName {
+  switch (header.toLowerCase()) {
+    case "summary":
+      return "summary";
+    case "assumptions":
+      return "assumptions";
+    case "changes":
+      return "changes";
+    case "test plan":
+      return "testPlan";
+    case "steps":
+      return "steps";
+    default:
+      throw new Error(`Unknown plan section: ${header}`);
+  }
+}
+
+function parsePlanList(section: string): string[] {
+  return section
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => line.replace(/^[-*+]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+}
+
+function parsePlanSteps(section: string): PlanStep[] | undefined {
+  const lines = section
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return undefined;
+
+  const steps: PlanStep[] = [];
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(/^(\d+)[.)]\s+(.+?)\s*$/);
+    if (!match) return undefined;
+
+    const step = Number(match[1]);
+    const text = match[2].trim();
+    if (!Number.isSafeInteger(step) || step !== index + 1 || text.length === 0) {
+      return undefined;
+    }
+    steps.push({ step, text });
+  }
+  return steps;
+}
+
+/** Parse the reviewable plan document while keeping executable steps isolated. */
+export function extractPlan(message: string): Plan | undefined {
+  const headerMatch = PLAN_HEADER_PATTERN.exec(message);
+  if (!headerMatch || headerMatch.index === undefined) return undefined;
+
+  const planDocument = message.slice(headerMatch.index + headerMatch[0].length);
+  const sectionPattern = new RegExp(PLAN_SECTION_HEADER_SOURCE, "gim");
+  const matches = [...planDocument.matchAll(sectionPattern)];
+  if (matches.length !== PLAN_SECTION_NAMES.length) return undefined;
+
+  const sections = new Map<PlanSectionName, string>();
+  for (const [index, match] of matches.entries()) {
+    const name = normalizePlanSectionName(match[1]);
+    if (name !== PLAN_SECTION_NAMES[index] || sections.has(name)) {
+      return undefined;
+    }
+
+    const contentStart = (match.index ?? 0) + match[0].length;
+    const contentEnd = matches[index + 1]?.index ?? planDocument.length;
+    sections.set(name, planDocument.slice(contentStart, contentEnd).trim());
+  }
+
+  const summary = sections.get("summary") ?? "";
+  const steps = parsePlanSteps(sections.get("steps") ?? "");
+  if (summary.length === 0 || !steps) return undefined;
+
+  return {
+    summary,
+    assumptions: parsePlanList(sections.get("assumptions") ?? ""),
+    changes: parsePlanList(sections.get("changes") ?? ""),
+    testPlan: parsePlanList(sections.get("testPlan") ?? ""),
+    steps,
+  };
+}
+
 export function extractTodoItems(message: string): TodoItem[] {
+  const plan = extractPlan(message);
+  if (plan) {
+    return plan.steps.map((step) => ({ ...step, completed: false }));
+  }
+
+  // A structured plan that fails validation must not fall back to scraping
+  // numbered review content outside the Steps section.
+  const structuredSectionPattern = new RegExp(
+    PLAN_SECTION_HEADER_SOURCE,
+    "im",
+  );
+  if (structuredSectionPattern.test(message)) return [];
+
   const items: TodoItem[] = [];
   const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/i);
   if (!headerMatch) return items;
