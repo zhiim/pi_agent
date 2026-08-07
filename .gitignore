@@ -7,6 +7,7 @@ auth.json
 mcp-cache.json
 *.docker.*
 custom_models.json
+models-store.json
 
 # Logs
 logs
