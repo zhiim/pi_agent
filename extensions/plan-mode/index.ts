@@ -98,7 +98,8 @@ function createTodoItems(
   return steps.map((step) => ({
     ...step,
     completed:
-      persistedItems?.find((item) => item.step === step.step)?.completed === true,
+      persistedItems?.find((item) => item.step === step.step)?.completed ===
+      true,
   }));
 }
 
@@ -148,10 +149,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         break;
     }
 
-    const showTodos =
-      todoItems.length > 0 &&
-      (workflowState === PlanWorkflowState.AwaitingApproval ||
-        isExecutionState(workflowState));
+    const showTodos = todoItems.length > 0 && isExecutionState(workflowState);
     if (!showTodos) {
       ctx.ui.setWidget("plan-todos", undefined);
       return;
