@@ -21,6 +21,7 @@ import type {
 import {
   extractPlan,
   filterPlanModeContextMessages,
+  formatPlan,
   isSafeCommand,
   markCurrentStepCompleted,
   readPromptFile,
@@ -288,6 +289,17 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         )
         .join("\n");
       ctx.ui.notify(`Plan Progress:\n${list}`, "info");
+    },
+  });
+
+  pi.registerCommand("plan-info", {
+    description: "Show the complete plan during execution",
+    handler: async (_args, ctx) => {
+      if (!isExecutionState(workflowState) || !currentPlan) {
+        ctx.ui.notify("No active execution plan to show.", "warning");
+        return;
+      }
+      ctx.ui.notify(formatPlan(currentPlan), "info");
     },
   });
 

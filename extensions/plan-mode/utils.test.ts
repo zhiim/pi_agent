@@ -4,6 +4,7 @@ import {
   extractPlan,
   extractTodoItems,
   filterPlanModeContextMessages,
+  formatPlan,
 } from "./utils.ts";
 import { PlanWorkflowState } from "./workflow.ts";
 
@@ -123,6 +124,54 @@ test("extractPlan parses the complete review document and executable steps", () 
       { step: 2, text: "Integrate parsed steps with scheduling." },
     ],
   });
+});
+
+test("formatPlan renders every section in canonical order", () => {
+  const plan = extractPlan(completePlan);
+  assert.ok(plan);
+
+  assert.equal(
+    formatPlan(plan),
+    `Plan:
+Summary:
+Separate review metadata from executable scheduling.
+Assumptions:
+- Assumption: Existing sessions may contain legacy todos.
+- Risk: Review content may contain numbered examples.
+Changes:
+- Implementation: Parse named sections into a Plan object.
+- API/type change: Add Plan and PlanStep interfaces.
+- Rollback: Restore the legacy parser and prompt.
+Test Plan:
+- 1. This numbered review scenario must not become an execution item.
+- Validation: Run the focused Node test suite.
+Steps:
+1. Add the structured plan parser.
+2. Integrate parsed steps with scheduling.`,
+  );
+});
+
+test("formatPlan uses None for empty review lists", () => {
+  assert.equal(
+    formatPlan({
+      summary: "Keep the complete plan reviewable.",
+      assumptions: [],
+      changes: [],
+      testPlan: [],
+      steps: [{ step: 1, text: "Show the plan." }],
+    }),
+    `Plan:
+Summary:
+Keep the complete plan reviewable.
+Assumptions:
+- None
+Changes:
+- None
+Test Plan:
+- None
+Steps:
+1. Show the plan.`,
+  );
 });
 
 test("extractTodoItems schedules only numbered lines from Steps", () => {

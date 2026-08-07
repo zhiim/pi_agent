@@ -200,6 +200,29 @@ export interface TodoItem extends PlanStep {
   completed: boolean;
 }
 
+function formatPlanList(items: readonly string[]): string[] {
+  return items.length > 0
+    ? items.map((item) => `- ${item}`)
+    : ["- None"];
+}
+
+/** Rebuild the complete structured plan in its canonical review format. */
+export function formatPlan(plan: Plan): string {
+  return [
+    "Plan:",
+    "Summary:",
+    plan.summary,
+    "Assumptions:",
+    ...formatPlanList(plan.assumptions),
+    "Changes:",
+    ...formatPlanList(plan.changes),
+    "Test Plan:",
+    ...formatPlanList(plan.testPlan),
+    "Steps:",
+    ...plan.steps.map((step) => `${step.step}. ${step.text}`),
+  ].join("\n");
+}
+
 const PLAN_HEADER_PATTERN =
   /^[^\S\r\n]*(?:#{1,6}[^\S\r\n]+)?\*{0,2}Plan:\*{0,2}[^\S\r\n]*$/im;
 const PLAN_SECTION_NAMES = [
