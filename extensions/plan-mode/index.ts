@@ -45,6 +45,12 @@ import {
 
 const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
 
+// Core truncates string-array widgets at 10 lines and appends a fixed
+// "... (widget truncated)" note. We render a component instead so the todo
+// widget stays within the same budget while keeping the current step and all
+// remaining steps visible, and hidden items are summarized with a hint.
+const MAX_TODO_WIDGET_LINES = 10;
+
 interface PersistedPlanModeState {
   state?: PlanWorkflowState;
   plan?: Plan;
@@ -141,22 +147,75 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     }
 
     const currentStep = todoItems.find((item) => !item.completed);
-    const lines = todoItems.map((item) => {
+    const renderItem = (item: TodoItem): string => {
+      const label = `${item.step < 10 ? "0" : ""}${item.step}. ${item.text}`;
+
       if (item.completed) {
         return (
           ctx.ui.theme.fg("success", "󰄵 ") +
-          ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
+          ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(label))
         );
       }
       if (workflowState === PlanWorkflowState.Paused && item === currentStep) {
         return (
-          ctx.ui.theme.fg("warning", " ") +
-          ctx.ui.theme.fg("warning", item.text)
+          ctx.ui.theme.fg("warning", " ") + ctx.ui.theme.fg("warning", label)
         );
       }
-      return `${ctx.ui.theme.fg("muted", "󰄱 ")}${item.text}`;
-    });
-    ctx.ui.setWidget("plan-todos", lines);
+      return `${ctx.ui.theme.fg("muted", "󰄱 ")}${label}`;
+    };
+
+    /**
+     * Slice the todo list to fit the widget budget: remaining (incomplete)
+     * steps always come first with the current step at the top, then the most
+     * recently completed steps. Anything dropped is summarized in a hint line
+     * instead of a bare "widget truncated".
+     */
+    const buildWidgetLines = (): string[] => {
+      const remaining = todoItems.filter((item) => !item.completed);
+      const completed = todoItems.filter((item) => item.completed);
+      const lines: string[] = [];
+      // Reserve one line for the hint whenever anything is hidden.
+      const capacity = MAX_TODO_WIDGET_LINES - 1;
+      let hiddenRemaining = 0;
+      let hiddenCompleted = 0;
+
+      if (remaining.length > capacity) {
+        for (const item of remaining.slice(0, capacity))
+          lines.push(renderItem(item));
+        hiddenRemaining = remaining.length - capacity;
+      } else {
+        const completedBudget = capacity - remaining.length;
+        if (completed.length > completedBudget) {
+          hiddenCompleted = completed.length - completedBudget;
+          for (const item of completed.slice(-completedBudget)) {
+            lines.push(renderItem(item));
+          }
+        } else {
+          for (const item of completed) lines.push(renderItem(item));
+        }
+        for (const item of remaining) lines.push(renderItem(item));
+      }
+
+      const hidden: string[] = [];
+      if (hiddenRemaining > 0) hidden.push(`${hiddenRemaining} upcoming`);
+      if (hiddenCompleted > 0) hidden.push(`${hiddenCompleted} completed`);
+      if (hidden.length > 0) {
+        lines.push(
+          ctx.ui.theme.fg(
+            "muted",
+            `… ${hidden.join(", ")} steps hidden — /todos to view`,
+          ),
+        );
+      }
+      return lines;
+    };
+
+    // Component factory instead of a string array: the core 10-line cap and
+    // its fixed "widget truncated" note only apply to string-array widgets.
+    ctx.ui.setWidget("plan-todos", () => ({
+      render: () => buildWidgetLines(),
+      invalidate: () => {},
+    }));
   }
 
   function captureNewlyActivatedTools(): void {
@@ -273,7 +332,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       }
       const list = todoItems
         .map(
-          (item, i) => `${i + 1}. ${item.completed ? "" : ""} ${item.text}`,
+          (item, i) =>
+            `${i + 1 < 10 ? "0" : ""}${i + 1}. ${item.completed ? "" : ""} ${item.text}`,
         )
         .join("\n");
       ctx.ui.notify(`Plan Progress:\n${list}`, "info");
