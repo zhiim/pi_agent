@@ -42,6 +42,7 @@ import {
   restorePlanWorkflowState,
   transitionPlanWorkflow,
 } from "./workflow.ts";
+import { complete } from "@earendil-works/pi-ai/compat";
 
 const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
 
@@ -187,7 +188,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         const completedBudget = capacity - remaining.length;
         if (completed.length > completedBudget) {
           hiddenCompleted = completed.length - completedBudget;
-          for (const item of completed.slice(-completedBudget)) {
+          for (const item of completed.slice(
+            completed.length - completedBudget,
+          )) {
             lines.push(renderItem(item));
           }
         } else {
