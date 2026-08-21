@@ -13,7 +13,9 @@
     "external_directory": {
       "*": "ask",
       "/tmp/pi-github-repos": "allow",
-      "/tmp/pi-github-repos/*": "allow"
+      "/tmp/pi-github-repos/*": "allow",
+      "~/.pi/agent/skills/": "allow",
+      "~/.pi/agent/skills/*": "allow"
     },
     "read": {
       "*": "allow",
