@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import planModeExtension from "./index.ts";
 
 interface TestContext {
@@ -91,11 +92,14 @@ test("execution restores tools registered lazily during plan mode", async () => 
   ]);
 });
 
-test("todo widget render never exceeds the 10-line budget", async () => {
+test("todo widget render stays within its line and width budgets", async () => {
   const commands = new Map<string, CommandHandler>();
   const eventHandlers = new Map<string, EventHandler>();
   let widgetFactory:
-    | ((tui: unknown, theme: unknown) => { render: () => string[] })
+    | ((
+        tui: unknown,
+        theme: unknown,
+      ) => { render: (width: number) => string[] })
     | undefined;
 
   const pi = {
@@ -124,8 +128,8 @@ test("todo widget render never exceeds the 10-line budget", async () => {
     hasUI: true,
     ui: {
       theme: {
-        fg: (_color, text) => text,
-        strikethrough: (text) => text,
+        fg: (_color, text) => `\u001b[31m${text}\u001b[39m`,
+        strikethrough: (text) => `\u001b[9m${text}\u001b[29m`,
       },
       notify() {},
       setStatus() {},
@@ -156,7 +160,11 @@ test("todo widget render never exceeds the 10-line budget", async () => {
     "Test Plan:",
     "- run tests",
     "Steps:",
-    ...Array.from({ length: 10 }, (_, i) => `${i + 1}. Step ${i + 1}`),
+    ...Array.from(
+      { length: 10 },
+      (_, i) =>
+        `${i + 1}. Step ${i + 1}：验证包含中文与 ANSI 样式的长待办项`,
+    ),
   ].join("\n");
 
   const agentEnd = eventHandlers.get("agent_end");
@@ -190,15 +198,24 @@ test("todo widget render never exceeds the 10-line budget", async () => {
 
   assert.ok(widgetFactory, "plan-todos widget factory was not registered");
   const widget = widgetFactory(undefined, undefined);
-  const lines = widget.render();
+  const width = 24;
+  const lines = widget.render(width);
 
   assert.ok(
     lines.length <= 10,
     `todo widget rendered ${lines.length} lines, expected at most 10:\n${lines.join("\n")}`,
   );
+  assert.ok(
+    lines.every((line) => visibleWidth(line) <= width),
+    `todo widget exceeded width ${width}:\n${lines
+      .map((line) => `${visibleWidth(line)}: ${line}`)
+      .join("\n")}`,
+  );
   // Completed step 1 must be hidden (summarized in the hint), not rendered.
   // Rendered labels are zero-padded ("01. Step 1"), so "Step 1" alone would
-  // also match "Step 10".
-  assert.ok(!lines.some((line) => line.includes("01. Step 1")));
-  assert.ok(lines.some((line) => line.includes("steps hidden")));
+  // also match "Step 10". Use a wide render for content assertions because
+  // the narrow render intentionally truncates the hint itself.
+  const wideLines = widget.render(120);
+  assert.ok(!wideLines.some((line) => line.includes("01. Step 1：")));
+  assert.ok(wideLines.some((line) => line.includes("steps hidden")));
 });

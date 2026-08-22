@@ -42,7 +42,7 @@ import {
   restorePlanWorkflowState,
   transitionPlanWorkflow,
 } from "./workflow.ts";
-import { complete } from "@earendil-works/pi-ai/compat";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const RESOURCE_PATH = `${process.env.HOME}/.pi/agent/extensions/plan-mode`;
 
@@ -216,7 +216,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     // Component factory instead of a string array: the core 10-line cap and
     // its fixed "widget truncated" note only apply to string-array widgets.
     ctx.ui.setWidget("plan-todos", () => ({
-      render: () => buildWidgetLines(),
+      render: (width: number) =>
+        buildWidgetLines().map((line) =>
+          visibleWidth(line) > width ? truncateToWidth(line, width) : line,
+        ),
       invalidate: () => {},
     }));
   }
