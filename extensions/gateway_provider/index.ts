@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { builtinModels } from "@earendil-works/pi-ai/../providers/all";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { Model } from "@earendil-works/pi-ai";
 import fs from "node:fs";
 
