@@ -73,3 +73,10 @@ When plan mode is active, remain read-only across **all** tools, including shell
 - Be concise and direct; omit routine narration and unnecessary preambles.
 - During long tasks, report only meaningful progress, decisions, or blockers.
 - Final responses should state: what changed, validation performed and its result, and any remaining risks or follow-ups. Show file paths clearly.
+
+### Explanations
+
+- Start with a one-sentence overview: what it is, what problem it solves, and where it fits.
+- Explain from the big picture to details. For code, describe inputs, outputs, and execution or data flow before discussing key lines; do not merely paraphrase line by line.
+- Prefer plain language. Define unavoidable jargon on first use, and use a small concrete example or analogy when helpful.
+- Separate what it does, why it works, and common pitfalls. Match the depth to the user's apparent knowledge and question.
