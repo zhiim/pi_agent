@@ -7,10 +7,80 @@ const debug_mode = process.env.PI_EXTENSION_DEBUG_MODE === "true";
 const debug_logger = (...args: any[]) =>
   debug_mode && console.log("[DEBUG]", ...args);
 
-const providerBaseUrl = process.env.PROVIDER_BASE_URL!;
-const providerApiKey = process.env.PROVIDER_API_KEY;
-const modelsCachePath = `${process.env.HOME}/.pi/agent/extensions/gateway_provider/models.json`;
-const customModelPath = `${process.env.HOME}/.pi/agent/extensions/gateway_provider/custom_models${debug_mode ? ".debug" : ""}.json`;
+const extensionPath = `${process.env.HOME}/.pi/agent/extensions/gateway_provider`;
+const customModelPath = `${extensionPath}/custom_models${debug_mode ? ".debug" : ""}.json`;
+
+interface ProviderConfig {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  modelsCachePath: string;
+}
+
+interface ModelInfo {
+  modelCard: string;
+  vendor: string;
+  modelId: string;
+}
+
+function getProviderConfigs(): ProviderConfig[] {
+  const namesValue = process.env.PROVIDER_NAMES;
+  const baseUrlsValue = process.env.PROVIDER_BASE_URLS;
+  const keysValue = process.env.PROVIDER_API_KEYS;
+  const hasMultiProviderConfig = [namesValue, baseUrlsValue, keysValue].some(
+    (value) => value !== undefined,
+  );
+
+  if (!hasMultiProviderConfig) {
+    const baseUrl = process.env.PROVIDER_BASE_URL;
+    const apiKey = process.env.PROVIDER_API_KEY;
+    if (!baseUrl || !apiKey) {
+      return [];
+    }
+
+    return [
+      {
+        name: "gateway",
+        baseUrl,
+        apiKey,
+        modelsCachePath: `${extensionPath}/models.json`,
+      },
+    ];
+  }
+
+  if (!namesValue || !baseUrlsValue || !keysValue) {
+    throw new Error(
+      "PROVIDER_NAMES, PROVIDER_BASE_URLS, and PROVIDER_KEYS must all be set",
+    );
+  }
+
+  const names = namesValue.split(",").map((value) => value.trim());
+  const baseUrls = baseUrlsValue.split(",").map((value) => value.trim());
+  const keys = keysValue.split(",").map((value) => value.trim());
+
+  if (names.length !== baseUrls.length || names.length !== keys.length) {
+    throw new Error(
+      "PROVIDER_NAMES, PROVIDER_BASE_URLS, and PROVIDER_KEYS must contain the same number of values",
+    );
+  }
+  if (
+    names.some((value) => !value) ||
+    baseUrls.some((value) => !value) ||
+    keys.some((value) => !value)
+  ) {
+    throw new Error("Provider names, base URLs, and keys must not be empty");
+  }
+  if (new Set(names).size !== names.length) {
+    throw new Error("PROVIDER_NAMES must not contain duplicates");
+  }
+
+  return names.map((name, index) => ({
+    name,
+    baseUrl: baseUrls[index]!,
+    apiKey: keys[index]!,
+    modelsCachePath: `${extensionPath}/models.${encodeURIComponent(name)}.json`,
+  }));
+}
 
 const builtins = builtinModels();
 let customs: Record<string, any> = {};
@@ -22,7 +92,7 @@ function splitName(name: string) {
   if (name.includes("/")) {
     return name.split("/");
   }
-  return name.split("@")
+  return name.split("@");
 }
 
 function processModelCard(modelCard: string) {
@@ -53,10 +123,10 @@ function processModelCard(modelCard: string) {
   return [vendor, modelId];
 }
 
-async function fetchModels() {
-  const response = await fetch(providerBaseUrl + "/v1/models", {
+async function fetchModels(provider: ProviderConfig) {
+  const response = await fetch(provider.baseUrl + "/v1/models", {
     headers: {
-      Authorization: `Bearer ${providerApiKey}`,
+      Authorization: `Bearer ${provider.apiKey}`,
     },
   });
   if (!response.ok) {
@@ -79,18 +149,14 @@ async function fetchModels() {
 
   payload = payload.filter((model) => splitName(model.id).length >= 2);
 
-  let modelInfos: Array<{
-    modelCard: string;
-    vendor: string;
-    modelId: string;
-  }>;
+  let modelInfos: ModelInfo[];
   modelInfos = payload.map((model) => {
     const [vendorName, modelName] = processModelCard(model.id);
     return { modelCard: model.id, vendor: vendorName, modelId: modelName };
   });
 
   const jsonString = JSON.stringify(modelInfos, null, 2);
-  fs.writeFile(modelsCachePath, jsonString, "utf8", (err) => {
+  fs.writeFile(provider.modelsCachePath, jsonString, "utf8", (err) => {
     if (err) {
       throw new Error(`Error writing models cache file: ${err}`);
     }
@@ -99,7 +165,7 @@ async function fetchModels() {
   return modelInfos;
 }
 
-function getProviderBaseUrl(api: string): string {
+function getProviderBaseUrl(api: string, providerBaseUrl: string): string {
   let baseUrl;
   switch (api) {
     case "openai-completions":
@@ -120,11 +186,10 @@ function getProviderBaseUrl(api: string): string {
   return baseUrl;
 }
 
-function getBuiltinModel(modelInfo: {
-  modelCard: string;
-  vendor: string;
-  modelId: string;
-}): Model<"openai-completions"> {
+function getBuiltinModel(
+  modelInfo: ModelInfo,
+  provider: ProviderConfig,
+): Model<"openai-completions"> {
   const { modelCard, vendor, modelId } = modelInfo;
 
   debug_logger(`model card: ${modelCard}`);
@@ -143,8 +208,8 @@ function getBuiltinModel(modelInfo: {
       cost: custom.cost,
       compat: custom.compat,
       api: custom.api,
-      provider: "gateway",
-      baseUrl: getProviderBaseUrl(custom.api),
+      provider: provider.name,
+      baseUrl: getProviderBaseUrl(custom.api, provider.baseUrl),
     };
   }
 
@@ -153,8 +218,8 @@ function getBuiltinModel(modelInfo: {
     id: modelCard,
     name: modelCard,
     api: "openai-completions",
-    provider: "gateway",
-    baseUrl: providerBaseUrl + "/v1",
+    provider: provider.name,
+    baseUrl: provider.baseUrl + "/v1",
     reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -178,7 +243,7 @@ function getBuiltinModel(modelInfo: {
     }
 
     let id = modelCard;
-    let baseUrl = getProviderBaseUrl(api);
+    let baseUrl = getProviderBaseUrl(api, provider.baseUrl);
 
     debug_logger(
       `  - builtin model found: ${builtin.id}, api=${builtin.api}, baseUrl=${builtin.baseUrl}`,
@@ -191,7 +256,7 @@ function getBuiltinModel(modelInfo: {
       id: id,
       name: name,
       api: api,
-      provider: "gateway",
+      provider: provider.name,
       baseUrl: baseUrl,
     };
   }
@@ -200,53 +265,55 @@ function getBuiltinModel(modelInfo: {
 }
 
 function registerProvider(
-  modelInfos: Array<{
-    modelCard: string;
-    vendor: string;
-    modelId: string;
-  }>,
+  modelInfos: ModelInfo[],
+  provider: ProviderConfig,
   pi: ExtensionAPI,
 ) {
   const builtinModelInfos = modelInfos.map((modelInfo) => {
-    return getBuiltinModel(modelInfo);
+    return getBuiltinModel(modelInfo, provider);
   });
 
-  pi.registerProvider("gateway", {
-    baseUrl: providerBaseUrl,
-    apiKey: providerApiKey,
+  pi.registerProvider(provider.name, {
+    baseUrl: provider.baseUrl,
+    apiKey: provider.apiKey,
     models: builtinModelInfos,
   });
 }
 
+async function loadModelInfos(provider: ProviderConfig): Promise<ModelInfo[]> {
+  if (!fs.existsSync(provider.modelsCachePath)) {
+    return fetchModels(provider);
+  }
+
+  if (
+    Date.now() - fs.statSync(provider.modelsCachePath).mtimeMs >
+      3 * 24 * 60 * 60 * 1000 ||
+    debug_mode
+  ) {
+    return fetchModels(provider);
+  }
+
+  return JSON.parse(fs.readFileSync(provider.modelsCachePath, "utf8"));
+}
+
 export default async function (pi: ExtensionAPI) {
-  if (!providerBaseUrl || !providerApiKey) {
+  const providers = getProviderConfigs();
+  if (providers.length === 0) {
     return null;
   }
 
-  let modelInfos;
-  if (!fs.existsSync(modelsCachePath)) {
-    modelInfos = fetchModels();
-  } else {
-    if (
-      Date.now() - fs.statSync(modelsCachePath).mtimeMs >
-        3 * 24 * 60 * 60 * 1000 ||
-      debug_mode
-    ) {
-      modelInfos = fetchModels();
-    } else {
-      modelInfos = JSON.parse(fs.readFileSync(modelsCachePath, "utf8"));
-    }
+  for (const provider of providers) {
+    const modelInfos = await loadModelInfos(provider);
+    registerProvider(modelInfos, provider, pi);
   }
-
-  modelInfos = await modelInfos;
-
-  registerProvider(modelInfos, pi);
 
   pi.registerCommand("model-refresh", {
     description: "Refresh the list of models from the provider",
     handler: async (_, ctx) => {
-      let modelInfos = await fetchModels();
-      registerProvider(modelInfos, pi);
+      for (const provider of providers) {
+        const modelInfos = await fetchModels(provider);
+        registerProvider(modelInfos, provider, pi);
+      }
       ctx.ui.notify("Models refreshed", "info");
     },
   });
