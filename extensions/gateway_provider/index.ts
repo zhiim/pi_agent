@@ -18,12 +18,19 @@ if (fs.existsSync(customModelPath)) {
   customs = JSON.parse(fs.readFileSync(customModelPath, "utf8"));
 }
 
+function splitName(name: string) {
+  if (name.includes("/")) {
+    return name.split("/");
+  }
+  return name.split("@")
+}
+
 function processModelCard(modelCard: string) {
   // modelCard format:
   //   - from vendor: `vendor/modelId`
   //   - from third party gateway provider: `provider/vendor/modelId`
 
-  let cardInfos = modelCard.split("/");
+  let cardInfos = splitName(modelCard);
 
   let vendor = cardInfos.shift();
   if (!vendor) {
@@ -70,7 +77,7 @@ async function fetchModels() {
     ).data;
   }
 
-  payload = payload.filter((model) => model.id.split("/").length >= 2);
+  payload = payload.filter((model) => splitName(model.id).length >= 2);
 
   let modelInfos: Array<{
     modelCard: string;
@@ -163,7 +170,7 @@ function getBuiltinModel(modelInfo: {
   if (builtin) {
     let api = builtin.api;
     let name = builtin.name;
-    const providerName = modelCard.split("/")[0];
+    const providerName = splitName(modelCard)[0];
     if (vendor !== providerName) {
       // if the vendor is not the first part of the model card, it means the model is from a gateway provider
       api = "openai-completions";
@@ -171,10 +178,6 @@ function getBuiltinModel(modelInfo: {
     }
 
     let id = modelCard;
-    if (api === "google-generative-ai") {
-      // model id of gemini API should not contain `/`
-      id = modelId;
-    }
     let baseUrl = getProviderBaseUrl(api);
 
     debug_logger(
