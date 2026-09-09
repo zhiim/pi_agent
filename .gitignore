@@ -1,7 +1,6 @@
 fff/
 ayu/
 sessions/
-models.json
 package-lock.json
 package.json
 auth.json
@@ -9,6 +8,8 @@ mcp-cache.json
 *.docker.*
 custom_models.json
 models-store.json
+extensions/gateway_provider/models.*.json
+extensions/gateway_provider/models.json
 
 # Logs
 logs

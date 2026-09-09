@@ -17,32 +17,6 @@
       "~/.pi/agent/skills/": "allow",
       "~/.pi/agent/skills/*": "allow"
     },
-    "read": {
-      "*": "allow",
-      "*.env": "deny",
-      "*.env.*": "deny",
-      "*.env.example": "allow"
-    },
-    "grep": {
-      "*": "allow",
-      "*.env": "deny",
-      "*.env.*": "deny",
-      "*.env.example": "allow"
-    },
-    "find": {
-      "*": "allow"
-    },
-    "ls": {
-      "*": "allow"
-    },
-    "write": {
-      "*": "ask",
-      "*.lock": "deny"
-    },
-    "edit": {
-      "*": "ask",
-      "*.lock": "deny"
-    },
     "bash": {
       "*": "ask",
       "cat *": "allow",
@@ -97,16 +71,6 @@
       "rm -rf *": "ask",
       "sudo *": "ask"
     },
-    "fffind": "allow",
-    "ffgrep": "allow",
-    "web_search": "allow",
-    "fetch_content": "allow",
-    "get_search_content": "allow",
-    "ctx_stats": "allow",
-    "ctx_doctor": "allow",
-    "ctx_search": "allow",
-    "ask_user_question": "allow",
-    "third_party_tool": "ask",
     "mcp": {
       "*": "ask",
       "mcp_status": "allow",
@@ -119,6 +83,42 @@
       "librarian": "allow",
       "context-mode": "allow",
       "ctx-*": "allow"
-    }
+    },
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "grep": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "find": {
+      "*": "allow"
+    },
+    "ls": {
+      "*": "allow"
+    },
+    "write": {
+      "*": "ask",
+      "*.lock": "deny"
+    },
+    "edit": {
+      "*": "ask",
+      "*.lock": "deny"
+    },
+    "fffind": "allow",
+    "ffgrep": "allow",
+    "web_search": "allow",
+    "fetch_content": "allow",
+    "get_search_content": "allow",
+    "ctx_stats": "allow",
+    "ctx_doctor": "allow",
+    "ctx_search": "allow",
+    "ask_user_question": "allow",
+    "third_party_tool": "ask"
   }
 }
