@@ -10,6 +10,7 @@ custom_models.json
 models-store.json
 extensions/gateway_provider/models.*.json
 extensions/gateway_provider/models.json
+web-search-cache/
 
 # Logs
 logs
