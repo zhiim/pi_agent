@@ -25,7 +25,7 @@ Preserve user-authored and pre-existing changes. Never discard, overwrite, reset
 
 Use the most specialized available tool and avoid redundant calls.
 
-- **Path discovery:** when the current project has a Codegraph index, start with Codegraph for semantic questions about features, symbols, architecture, or behavior. Otherwise use `fffind` for files by concept or path. Keep path queries short and constrain/exclude noisy paths.
+- **Path discovery:** start with `codegraph` for semantic questions about features, symbols, architecture, or behavior. Otherwise use `fffind` for files by concept or path. Keep path queries short and constrain/exclude noisy paths.
 - **Content search:** use Codegraph for symbol relationships and call flow; use `ffgrep` for exact identifiers or text. After one or two searches, inspect the best match instead of repeatedly grepping.
 - **Content search:** use `ffgrep` for identifiers and code text. After one or two searches, inspect the best match instead of repeatedly grepping.
 - **Exact inspection and editing:** use `read` for the exact source/range needed before an edit; use `edit` for targeted replacements and `write` for new files or intentional full replacements. `ctx_execute_file` is for analysis, not editing.

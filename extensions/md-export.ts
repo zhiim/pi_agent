@@ -1,10 +1,12 @@
 import { access, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+	DynamicBorder,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import { Container, SelectList, Text } from "@earendil-works/pi-tui";
 
 type ExportMetadata = {
 	title: string;
@@ -148,6 +150,44 @@ function buildUserTurns(entries: readonly SessionEntry[]): UserTurn[] {
 	});
 }
 
+async function selectUserTurn(ctx: ExtensionCommandContext, turns: UserTurn[]): Promise<string | undefined> {
+	const title = "Select a user turn to export";
+	if (ctx.mode !== "tui") return ctx.ui.select(title, turns.map((turn) => turn.label));
+
+	return ctx.ui.custom<string | undefined>((tui, theme, _keybindings, done) => {
+		const container = new Container();
+		container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
+		container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+
+		const list = new SelectList(
+			turns.map((turn) => ({ value: turn.label, label: turn.label })),
+			Math.min(turns.length, 10),
+			{
+				selectedPrefix: (text) => theme.fg("accent", text),
+				selectedText: (text) => theme.fg("accent", text),
+				description: (text) => theme.fg("muted", text),
+				scrollInfo: (text) => theme.fg("dim", text),
+				noMatch: (text) => theme.fg("warning", text),
+			},
+		);
+		list.setSelectedIndex(turns.length - 1);
+		list.onSelect = (item) => done(item.value);
+		list.onCancel = () => done(undefined);
+		container.addChild(list);
+		container.addChild(new Text(theme.fg("dim", "↑↓ navigate · enter select · esc cancel"), 1, 0));
+		container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
+
+		return {
+			render: (width: number) => container.render(width),
+			invalidate: () => container.invalidate(),
+			handleInput: (data: string) => {
+				list.handleInput(data);
+				tui.requestRender();
+			},
+		};
+	});
+}
+
 function slugify(value: string): string {
 	const slug = value
 		.normalize("NFKC")
@@ -227,10 +267,7 @@ export default function mdExportExtension(pi: ExtensionAPI) {
 					return;
 				}
 
-				const selectedLabel = await ctx.ui.select(
-					"Select a user turn to export (type to search)",
-					turns.map((turn) => turn.label),
-				);
+				const selectedLabel = await selectUserTurn(ctx, turns);
 				if (!selectedLabel) return;
 
 				const selected = turns.find((turn) => turn.label === selectedLabel);
