@@ -73,10 +73,7 @@
     },
     "mcp": {
       "*": "ask",
-      "mcp_status": "allow",
-      "mcp_list": "allow",
-      "mcp_search": "allow",
-      "mcp_describe": "allow"
+      "mcp__codegraph__codegraph_explore": "allow"
     },
     "skill": {
       "*": "ask",
@@ -117,7 +114,6 @@
     "get_search_content": "allow",
     "ask_user_question": "allow",
     "codemode": "allow",
-    "mcp__codegraph__codegraph_explore": "allow",
     "ctx_*": "allow",
     "third_party_tool": "ask"
   }
