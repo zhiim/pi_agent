@@ -2,7 +2,6 @@
   "theme": "catppuccin",
   "packages": [
     "npm:pi-web-access",
-    "npm:pi-mcp-adapter",
     "npm:context-mode",
     "npm:@ff-labs/pi-fff",
     "npm:@ayulab/pi-rewind",

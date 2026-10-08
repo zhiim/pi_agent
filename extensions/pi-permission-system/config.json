@@ -116,7 +116,8 @@
     "fetch_content": "allow",
     "get_search_content": "allow",
     "ask_user_question": "allow",
-    "codegraph_explore": "allow",
+    "codemode": "allow",
+    "mcp__codegraph__codegraph_explore": "allow",
     "ctx_*": "allow",
     "third_party_tool": "ask"
   }

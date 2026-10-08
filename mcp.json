@@ -3,9 +3,7 @@
     "codegraph": {
       "type": "stdio",
       "command": "codegraph",
-      "args": ["serve", "--mcp"],
-      "alwaysLoad": true,
-      "directTools": ["codegraph_explore"]
+      "args": ["serve", "--mcp"]
     }
   }
 }

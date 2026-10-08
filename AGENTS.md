@@ -25,7 +25,7 @@ Preserve user-authored and pre-existing changes. Never discard, overwrite, reset
 
 Use the most specialized available tool and avoid redundant calls.
 
-- **Path discovery:** start with `codegraph` for semantic questions about features, symbols, architecture, or behavior. Otherwise use `fffind` for files by concept or path. Keep path queries short and constrain/exclude noisy paths.
+- **Path discovery:** start with `codegraph` MCP for semantic questions about features, symbols, architecture, or behavior. Otherwise use `fffind` for files by concept or path. Keep path queries short and constrain/exclude noisy paths.
 - **Content search:** use Codegraph for symbol relationships and call flow; use `ffgrep` for exact identifiers or text. After one or two searches, inspect the best match instead of repeatedly grepping.
 - **Content search:** use `ffgrep` for identifiers and code text. After one or two searches, inspect the best match instead of repeatedly grepping.
 - **Exact inspection and editing:** use `read` for the exact source/range needed before an edit; use `edit` for targeted replacements and `write` for new files or intentional full replacements. `ctx_execute_file` is for analysis, not editing.
@@ -34,7 +34,6 @@ Use the most specialized available tool and avoid redundant calls.
 - **Shell:** use `bash` only when it is the clearest tool, especially for guaranteed-small observations or necessary state-changing commands. Quote paths and avoid unbounded output.
 - **Web research:** use `web_search` with 2–4 varied queries for broad research. Use `fetch_content` for a known URL, repository, document, or video, and `get_search_content` only when stored full content is needed. Cite authoritative sources for factual claims.
 - **Open-source internals:** invoke the `librarian` skill when implementation details, history, or GitHub line permalinks are required.
-- **MCP:** `npm:pi-mcp-adapter` is installed as the unified gateway for multiple MCP servers and lazily loads individual servers on demand. Route MCP discovery and calls through the `mcp` gateway rather than addressing servers directly. Search/describe unfamiliar tools before calling them, connect or trigger lazy loading only when a relevant server is needed, and do not probe MCP when no server can help. Use `mcpScript` when one operation requires multiple MCP calls with logic between them.
 - **Skills:** load only skills whose descriptions match the task, then follow their `SKILL.md`. Do not invoke skills merely because they are available.
 
 Parallelize independent reads, searches, and network lookups. Keep edits, package operations, builds, tests, and other shared-state actions sequential unless concurrency is known to be safe.
