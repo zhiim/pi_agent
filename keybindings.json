@@ -1,0 +1,36 @@
+{
+  "tui.altScreen.lineUp": [
+    "shift+up",
+    "alt+up"
+  ],
+  "tui.altScreen.lineDown": [
+    "shift+down",
+    "alt+down"
+  ],
+  "tui.altScreen.halfPageUp": [
+    "ctrl+up",
+    "ctrl+pageUp"
+  ],
+  "tui.altScreen.halfPageDown": [
+    "ctrl+down",
+    "ctrl+pageDown"
+  ],
+  "tui.altScreen.pageUp": [
+    "pageUp",
+    "alt+pageUp"
+  ],
+  "tui.altScreen.pageDown": [
+    "pageDown",
+    "alt+pageDown"
+  ],
+  "tui.altScreen.top": [
+    "ctrl+home",
+    "alt+home"
+  ],
+  "tui.altScreen.bottom": [
+    "ctrl+end",
+    "alt+end"
+  ],
+  "tui.altScreen.previousPrompt": "ctrl+shift+up",
+  "tui.altScreen.nextPrompt": "ctrl+shift+down"
+}
