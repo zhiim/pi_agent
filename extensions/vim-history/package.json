@@ -1,0 +1,15 @@
+{
+  "name": "pi-vim-history",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi fullscreen modal input and user-message history navigation",
+  "scripts": {
+    "test": "node scripts/run.mjs test",
+    "check": "node scripts/run.mjs check"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
+  }
+}

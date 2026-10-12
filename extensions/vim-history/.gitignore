@@ -1,0 +1,7 @@
+node_modules/
+__pycache__/
+*.tsbuildinfo
+
+# The agent directory ignores these globally; this plugin needs reproducible checks.
+!package.json
+!package-lock.json
