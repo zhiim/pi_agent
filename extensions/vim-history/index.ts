@@ -114,35 +114,4 @@ export default function vimHistory(pi: ExtensionAPI): void {
     owner = undefined;
     ownedFactory = undefined;
   });
-
-  pi.registerCommand("vim-history", {
-    description: "Vim 历史导航：status / on / off（仅全屏 TUI）",
-    handler: async (args, ctx) => {
-      if (ctx.mode !== "tui") return;
-      switch (args.trim()) {
-        case "on":
-          install(ctx);
-          break;
-        case "off":
-          editor?.dispose();
-          if (ownedFactory && ctx.ui.getEditorComponent() === ownedFactory)
-            ctx.ui.setEditorComponent(undefined);
-          ctx.ui.setStatus(STATUS, undefined);
-          editor = undefined;
-          ownedFactory = undefined;
-          break;
-        case "":
-        case "status":
-          ctx.ui.notify(
-            ownedFactory && ctx.ui.getEditorComponent() === ownedFactory
-              ? `vim-history: ${editor?.vimMode.toUpperCase()}；Esc 切换，j/k、Ctrl+u/d、G 导航，i/a 输入`
-              : "vim-history: OFF；/vim-history on 启用",
-            "info",
-          );
-          break;
-        default:
-          ctx.ui.notify("用法：/vim-history [status|on|off]", "warning");
-      }
-    },
-  });
 }

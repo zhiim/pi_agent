@@ -274,12 +274,7 @@ export default function(pi) {
         drain(1)
         reloaded = snapshot()
         assert any("INSERT" in line for line in reloaded["screen"]), reloaded
-        send(b"/vim-history off\r")
-        off = snapshot()
-        assert not off["coloredInsert"] and not off["coloredNormal"], off
-        send(b"/vim-history on\r")
-        on = snapshot()
-        assert on["coloredInsert"], on
+        assert reloaded["coloredInsert"], reloaded
         # Exercise a real agent run with only the local mock stream. Ctrl+C
         # must deliver the provider AbortSignal and leave the unsent draft intact.
         for mode in ["insert", "normal"]:
@@ -312,7 +307,7 @@ export default function(pi) {
             cleared = snapshot()
             assert "unsent draft" not in "\n".join(cleared["screen"]), cleared
         print(
-            "PASS bundled Pi PTY: Ctrl+C aborts real mock agent runs in both modes, preserves draft, idle clears; colored modes, navigation, resize, reload, off/on; scrollbar="
+            "PASS bundled Pi PTY: Ctrl+C aborts real mock agent runs in both modes, preserves draft, idle clears; colored modes, navigation, resize, reload; scrollbar="
             + os.environ.get("SMOKE_SCROLLBAR", "always")
         )
     finally:
