@@ -1,8 +1,7 @@
-import {
-  VERSION,
-  type ExtensionAPI,
-  type ExtensionContext,
-  type KeybindingsManager,
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Keybinding, KeyId } from "@earendil-works/pi-tui";
 import { VimHistoryEditor } from "./modal-editor.ts";
@@ -48,16 +47,6 @@ export function viewportConflicts(kb: KeybindingsManager): string[] {
 }
 
 export default function vimHistory(pi: ExtensionAPI): void {
-  if (VERSION !== "1.1.0") {
-    pi.on("session_start", (_event, ctx) => {
-      if (ctx.mode === "tui")
-        ctx.ui.notify(
-          `vim-history 已跳过：当前仅验证 Pi 1.1.0（当前 ${VERSION}）`,
-          "warning",
-        );
-    });
-    return;
-  }
   let ownedFactory: EditorFactory | undefined;
   let editor: VimHistoryEditor | undefined;
   let owner: ExtensionContext | undefined;

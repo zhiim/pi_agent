@@ -37,8 +37,6 @@ if (!host)
 const version = JSON.parse(
   fs.readFileSync(path.join(host, "package.json"), "utf8"),
 ).version;
-if (version !== "1.1.0")
-  throw new Error(`Expected host Pi 1.1.0, found ${version}`);
 const hostRequire = createRequire(path.join(host, "package.json"));
 const alias = {
   "@earendil-works/pi-coding-agent": path.join(host, "dist/index.js"),
