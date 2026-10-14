@@ -51,7 +51,7 @@ function formatSelection(message: SelectionMessage): string {
   return `Path: ${message.path}\nLines: ${message.startLine}-${message.endLine}\n\n${message.content}`;
 }
 
-function handleConnection(socket: Socket, ctx: ExtensionContext): void {
+function handleConnection(socket: Socket, ctx: ExtensionContext, pi: ExtensionAPI): void {
   socket.setEncoding("utf8");
 
   let input = "";
@@ -86,7 +86,11 @@ function handleConnection(socket: Socket, ctx: ExtensionContext): void {
         return;
       }
 
-      ctx.ui.pasteToEditor(formatSelection(message));
+      const text = formatSelection(message);
+      // EventBus invokes synchronous listeners before emit returns, allowing
+      // modal editors to enter INSERT before the native paste input arrives.
+      pi.events.emit("nvim-bridge:before-paste", { text });
+      ctx.ui.pasteToEditor(text);
       ctx.ui.notify(
         `Loaded ${path.basename(message.path)}:${message.startLine}-${message.endLine} from Neovim`,
         "info",
@@ -146,7 +150,7 @@ export default function (pi: ExtensionAPI) {
     const nextServer = net.createServer((socket) => {
       clients.add(socket);
       socket.once("close", () => clients.delete(socket));
-      handleConnection(socket, ctx);
+      handleConnection(socket, ctx, pi);
     });
 
     try {

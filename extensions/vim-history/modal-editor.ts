@@ -62,6 +62,12 @@ export class VimHistoryEditor extends CustomEditor {
     return this.mode;
   }
 
+  enterInsertMode(): void {
+    if (this.disposed) return;
+    this.syncCapability();
+    this.changeMode("insert");
+  }
+
   reset(): void {
     this.mode = "insert";
     this.inPaste = false;

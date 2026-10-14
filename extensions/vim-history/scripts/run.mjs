@@ -78,6 +78,8 @@ if (process.argv[2] === "test") {
       .filter((f) => f.endsWith(".ts"))
       .map((f) => path.join(root, "tests", f)),
   );
+  // The bridge is part of the modal-paste integration exercised by smoke.py.
+  files.push(path.resolve(root, "../nvim-bridge.ts"));
   const program = ts.createProgram(files, {
     noEmit: true,
     strict: true,

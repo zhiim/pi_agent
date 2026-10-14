@@ -92,9 +92,16 @@ export default function vimHistory(pi: ExtensionAPI): void {
     ctx.ui.setEditorComponent(ownedFactory);
   }
 
+  // Preparation only: nvim-bridge still owns the single native paste call.
+  const unsubscribeBridgePaste = pi.events.on("nvim-bridge:before-paste", () => {
+    if (owner && ownedFactory && owner.ui.getEditorComponent() === ownedFactory)
+      editor?.enterInsertMode();
+  });
+
   pi.on("session_start", (_event, ctx) => install(ctx));
   pi.on("session_tree", () => editor?.reset());
   pi.on("session_shutdown", () => {
+    unsubscribeBridgePaste();
     editor?.dispose();
     if (owner && ownedFactory && owner.ui.getEditorComponent() === ownedFactory)
       owner.ui.setEditorComponent(undefined);

@@ -2,12 +2,14 @@
 """Offline PTY smoke test with synthetic history and a local abortable mock model."""
 
 import fcntl
+import hashlib
 import json
 import os
 import pty
 import select
 import shutil
 import signal
+import socket
 import struct
 import tempfile
 import termios
@@ -143,7 +145,7 @@ export default function(pi) {
         tui.renderNow();
         const lines = tui.getScreenLines();
         snapshots.push({top: tui.viewportTop, following: tui.isFollowingOutput,
-          idle: ctx.isIdle(), mockRuns, mockAborts,
+          idle: ctx.isIdle(), mockRuns, mockAborts, draft: ctx.ui.getEditorText(),
           screen: lines.map(stripTerminalSequences),
           coloredInsert: lines.some(line => line.includes(ctx.ui.theme.fg("success", " INSERT "))),
           coloredNormal: lines.some(line => line.includes(ctx.ui.theme.fg("accent", " NORMAL ")))});
@@ -160,6 +162,7 @@ export default function(pi) {
         os.environ.update(
             {
                 "PI_CODING_AGENT_DIR": str(agent),
+                "XDG_RUNTIME_DIR": str(root),
                 "SMOKE_SNAPSHOTS": str(snapshots),
                 "TERM": "xterm-256color",
                 "PI_OFFLINE": "1",
@@ -181,6 +184,8 @@ export default function(pi) {
                 str(helper),
                 "--extension",
                 str(plugin),
+                "--extension",
+                str(plugin.parent / "nvim-bridge.ts"),
                 "--session",
                 str(session),
                 "--model",
@@ -226,6 +231,28 @@ export default function(pi) {
         raise AssertionError(
             "Pi did not produce snapshot: " + output.decode(errors="replace")[-1600:]
         )
+
+    def bridge_selection(content):
+        payload = {
+            "type": "selection",
+            "path": str(root / "example.ts"),
+            "startLine": 1,
+            "endLine": 2,
+            "content": content,
+        }
+        project_id = hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(5)
+            client.connect(str(root / "pi-nvim" / f"{project_id}.sock"))
+            client.sendall((json.dumps(payload) + "\n").encode())
+            response = b""
+            while b"\n" not in response:
+                chunk = client.recv(4096)
+                assert chunk, response
+                response += chunk
+            assert json.loads(response) == {"ok": True}, response
+        drain()
+        return f"Path: {payload['path']}\nLines: 1-2\n\n{content}"
 
     try:
         drain(2)
@@ -275,6 +302,19 @@ export default function(pi) {
         reloaded = snapshot()
         assert any("INSERT" in line for line in reloaded["screen"]), reloaded
         assert reloaded["coloredInsert"], reloaded
+        # Use the real Unix socket and native paste path after reload. NORMAL
+        # must switch synchronously; INSERT must not paste the selection twice.
+        for mode in ["normal", "insert"]:
+            send(b"draft")
+            if mode == "normal":
+                send(b"\x1b")
+                send(b"k")
+                assert snapshot()["coloredNormal"]
+            text = bridge_selection(f"BRIDGE_{mode}\n中文 iG[[")
+            pasted = snapshot()
+            assert pasted["coloredInsert"] and pasted["following"], pasted
+            assert pasted["draft"] == "draft" + text, pasted
+            send(b"\x03")
         # Exercise a real agent run with only the local mock stream. Ctrl+C
         # must deliver the provider AbortSignal and leave the unsent draft intact.
         for mode in ["insert", "normal"]:
@@ -307,7 +347,7 @@ export default function(pi) {
             cleared = snapshot()
             assert "unsent draft" not in "\n".join(cleared["screen"]), cleared
         print(
-            "PASS bundled Pi PTY: Ctrl+C aborts real mock agent runs in both modes, preserves draft, idle clears; colored modes, navigation, resize, reload; scrollbar="
+            "PASS bundled Pi PTY: real nvim-bridge socket pastes once in NORMAL/INSERT after reload; Ctrl+C aborts mock runs, preserves draft, idle clears; colored modes, navigation, resize; scrollbar="
             + os.environ.get("SMOKE_SCROLLBAR", "always")
         )
     finally:

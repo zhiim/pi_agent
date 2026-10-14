@@ -76,6 +76,50 @@ test("insert -> normal -> insert preserves draft and cursor, G follows bottom", 
   editor.dispose();
 });
 
+test("bridge preparation enters INSERT before native paste, preserving draft cursor and following output", () => {
+  const { tui, editor } = setup();
+  try {
+    editor.handleInput("draft");
+    editor.handleInput("\x1b[D");
+    const cursor = editor.getCursor();
+    editor.handleInput("\x1b");
+    editor.handleInput("k");
+    assert.equal(tui.isFollowingOutput, false);
+    // Ordinary terminal paste is still ignored in NORMAL.
+    editor.handleInput("\x1b[200~ignored\x1b[201~");
+    assert.equal(editor.getText(), "draft");
+    assert.equal(editor.vimMode, "normal");
+
+    let submits = 0;
+    editor.onSubmit = () => submits++;
+    editor.enterInsertMode();
+    assert.equal(editor.vimMode, "insert");
+    assert.deepEqual(editor.getCursor(), cursor);
+    assert.equal(tui.isFollowingOutput, true);
+    assert.equal(editor.getText(), "draft");
+    const selection = "Path: /tmp/example.ts\nLines: 1-2\n\niG[[中文\nsecond line";
+    editor.handleInput(`\x1b[200~${selection}\x1b[201~`);
+    assert.equal(editor.getExpandedText(), `draf${selection}t`);
+    assert.equal(submits, 0);
+    assert.ok(editor.render(60).some((line) => line.includes(CURSOR_MARKER)));
+    editor.enterInsertMode();
+    editor.handleInput("\x1b[200~again\x1b[201~");
+    assert.equal(editor.getExpandedText(), `draf${selection}againt`);
+  } finally {
+    tui.stop();
+    editor.dispose();
+  }
+});
+
+test("bridge preparation does not revive a disposed editor", () => {
+  const { tui, editor } = setup();
+  editor.handleInput("\x1b");
+  editor.dispose();
+  editor.enterInsertMode();
+  assert.equal(editor.vimMode, "normal");
+  tui.stop();
+});
+
 test("empty normal Ctrl+D does not exit, first Esc does not interrupt", () => {
   const { tui, editor } = setup();
   let interrupts = 0,
